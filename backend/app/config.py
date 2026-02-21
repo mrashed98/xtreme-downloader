@@ -67,6 +67,7 @@ class Settings(BaseSettings):
     # Download settings (startup defaults — overridden at runtime from DB)
     max_concurrent_downloads: int = 3
     download_chunks: int = 16
+    max_retries: int = 2
 
     # Scheduler intervals
     sync_interval_hours: int = 6

@@ -151,7 +151,7 @@ async def download_vod(
         language=body.language,
         file_path=file_path,
         status=DownloadStatus.queued,
-        chunks=dl_service.get_download_settings()["download_chunks"],
+        chunks=1,
     )
     db.add(download)
     await db.commit()

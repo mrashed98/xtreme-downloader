@@ -499,7 +499,7 @@ async def download_series(
             language=body.language,
             file_path=file_path,
             status=DownloadStatus.queued,
-            chunks=dl_service.get_download_settings()["download_chunks"],
+            chunks=1,
         )
         db.add(download)
         downloads.append((download, ep.episode_id, ext))

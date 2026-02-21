@@ -43,12 +43,14 @@ class SettingsRequest(BaseModel):
     max_concurrent_downloads: int = Field(ge=1, le=10)
     download_chunks: int = Field(ge=1, le=32)
     speed_limit_bps: int = Field(ge=0)  # bytes/sec; 0 = unlimited
+    max_retries: int = Field(default=2, ge=0, le=5)
 
 
 class SettingsResponse(BaseModel):
     max_concurrent_downloads: int
     download_chunks: int
     speed_limit_bps: int  # 0 = unlimited
+    max_retries: int
 
 
 class TrackingResponse(BaseModel):

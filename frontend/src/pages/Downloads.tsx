@@ -48,18 +48,20 @@ function SettingsPanel({ onClose }: { onClose: () => void }) {
   });
 
   const [concurrent, setConcurrent] = useState(3);
-  const [chunks, setChunks] = useState(16);
+  const [chunks, setChunks] = useState(1);
   const [speedUnit, setSpeedUnit] = useState<SpeedUnit>("unlimited");
   const [speedValue, setSpeedValue] = useState(0);
+  const [maxRetries, setMaxRetries] = useState(2);
 
   // Sync local state when remote data loads
   useEffect(() => {
     if (remoteSettings) {
       setConcurrent(remoteSettings.max_concurrent_downloads);
-      setChunks(remoteSettings.download_chunks);
+      setChunks(1);
       const { value, unit } = bpsToDisplay(remoteSettings.speed_limit_bps);
       setSpeedUnit(unit);
       setSpeedValue(value);
+      setMaxRetries(remoteSettings.max_retries ?? 2);
     }
   }, [remoteSettings]);
 
@@ -77,6 +79,7 @@ function SettingsPanel({ onClose }: { onClose: () => void }) {
       max_concurrent_downloads: concurrent,
       download_chunks: chunks,
       speed_limit_bps: displayToBps(speedValue, speedUnit),
+      max_retries: maxRetries,
     });
   };
 
@@ -111,20 +114,18 @@ function SettingsPanel({ onClose }: { onClose: () => void }) {
         />
       </div>
 
-      {/* Chunks per Download */}
+      {/* Max Retries */}
       <div className="space-y-2">
         <div className="flex items-center justify-between text-xs">
-          <span className="text-white/60" title="IDM-style parallel parts — higher = faster on good connections">
-            Chunks per Download
-          </span>
-          <span className="text-white font-medium tabular-nums">{chunks} / 32</span>
+          <span className="text-white/60">Max Retries</span>
+          <span className="text-white font-medium tabular-nums">{maxRetries} / 5</span>
         </div>
         <input
           type="range"
-          min={1}
-          max={32}
-          value={chunks}
-          onChange={(e) => setChunks(Number(e.target.value))}
+          min={0}
+          max={5}
+          value={maxRetries}
+          onChange={(e) => setMaxRetries(Number(e.target.value))}
           className="w-full accent-purple-500 cursor-pointer"
         />
       </div>
@@ -406,7 +407,7 @@ export function Downloads() {
           </div>
         </GlassCard>
       ) : (
-        <div className="space-y-3">
+        <div className="space-y-3 max-h-[calc(100vh-260px)] overflow-y-auto pr-1">
           {downloads.map((dl) => (
             <DownloadRow
               key={dl.id}

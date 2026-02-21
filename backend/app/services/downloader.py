@@ -25,7 +25,12 @@ _runtime = {
     "max_concurrent_downloads": 3,
     "download_chunks": 16,
     "speed_limit_bps": 0,
+    "max_retries": 2,
 }
+
+
+class IncompleteDownloadError(RuntimeError):
+    pass
 
 
 def init_downloader(max_concurrent: int = 3):
@@ -34,11 +39,17 @@ def init_downloader(max_concurrent: int = 3):
     _download_semaphore = asyncio.Semaphore(max_concurrent)
 
 
-def apply_settings(max_concurrent: int, download_chunks: int, speed_limit_bps: int):
+def apply_settings(
+    max_concurrent: int,
+    download_chunks: int,
+    speed_limit_bps: int,
+    max_retries: int,
+):
     global _download_semaphore
     _runtime["max_concurrent_downloads"] = max_concurrent
     _runtime["download_chunks"] = download_chunks
     _runtime["speed_limit_bps"] = speed_limit_bps
+    _runtime["max_retries"] = max_retries
     _download_semaphore = asyncio.Semaphore(max_concurrent)
 
 
@@ -128,8 +139,7 @@ async def download_file(
     if _download_semaphore is None:
         _download_semaphore = asyncio.Semaphore(_runtime["max_concurrent_downloads"])
 
-    if num_chunks is None:
-        num_chunks = _runtime["download_chunks"]
+    num_chunks = 1
 
     logger.info(
         f"[Download #{download_id}] download_file called — chunks={num_chunks}, "
@@ -154,7 +164,7 @@ async def download_file(
     logger.info(f"[Download #{download_id}] Slot acquired")
 
     try:
-        connector = aiohttp.TCPConnector(ssl=False, limit=num_chunks + 4)
+        connector = aiohttp.TCPConnector(ssl=False, limit=2)
         async with aiohttp.ClientSession(connector=connector) as session:
             logger.info(f"[Download #{download_id}] Checking range support...")
             supports_range, total_bytes = await _check_range_support(session, url)
@@ -162,143 +172,30 @@ async def download_file(
                 f"[Download #{download_id}] Range support: {supports_range}, "
                 f"size: {total_bytes} bytes ({total_bytes / 1024 / 1024:.1f} MB)"
             )
-
-            if not supports_range or total_bytes == 0:
-                logger.info(f"[Download #{download_id}] Falling back to single-stream download")
-                return await _single_stream_download(
-                    session, download_id, url, output_path, total_bytes, tmp_dir, db_updater
-                )
-
-            # Parallel chunk download
-            chunk_size = total_bytes // num_chunks
-            chunks = []
-            for i in range(num_chunks):
-                start = i * chunk_size
-                end = start + chunk_size - 1 if i < num_chunks - 1 else total_bytes - 1
-                chunk_file = os.path.join(tmp_dir, f"chunk_{i:04d}")
-                chunks.append((start, end, chunk_file))
-
-            if db_updater:
-                await db_updater(download_id, status="downloading", total_bytes=total_bytes)
-
-            await _broadcast(download_id, {"status": "downloading", "total_bytes": total_bytes})
-
-            downloaded_per_chunk = [0] * num_chunks
-            start_time = time.time()
-            total_downloaded = [0]
-
-            async def download_chunk_with_progress(i, start, end, chunk_file):
-                async def track(session, url, start, end, chunk_file, did):
-                    headers = {"Range": f"bytes={start}-{end}"}
-                    existing = 0
-                    if os.path.exists(chunk_file):
-                        existing = os.path.getsize(chunk_file)
-                        if existing >= (end - start + 1):
-                            downloaded_per_chunk[i] = existing
-                            total_downloaded[0] += existing
-                            return True
-                        start += existing
-                        downloaded_per_chunk[i] = existing
-                        total_downloaded[0] += existing
-
-                    mode = "ab" if existing > 0 else "wb"
-                    try:
-                        async with session.get(url, headers=headers, timeout=aiohttp.ClientTimeout(total=None, connect=30)) as resp:
-                            resp.raise_for_status()
-                            with open(chunk_file, mode) as f:
-                                try:
-                                    async for data in resp.content.iter_chunked(65536):
-                                        if _cancel_flags.get(did):
-                                            return False
-                                        while _pause_flags.get(did):
-                                            await asyncio.sleep(0.5)
-                                        f.write(data)
-                                        downloaded_per_chunk[i] += len(data)
-                                        total_downloaded[0] += len(data)
-
-                                        limit = _runtime["speed_limit_bps"]
-                                        if limit > 0:
-                                            per_slot = limit / max(1, _runtime["max_concurrent_downloads"])
-                                            elapsed = time.time() - start_time
-                                            expected = total_downloaded[0] / per_slot
-                                            if elapsed < expected:
-                                                await asyncio.sleep(expected - elapsed)
-                                except aiohttp.ClientPayloadError as e:
-                                    if downloaded_per_chunk[i] == 0:
-                                        raise
-                                    logger.warning(f"Chunk {i}: server closed early ({e}), treating as complete")
-                        return True
-                    except Exception as e:
-                        logger.error(f"Chunk {i} failed: {e}")
-                        return False
-
-                return await track(session, url, start, end, chunk_file, download_id)
-
-            # Progress reporter task
-            progress_done = asyncio.Event()
-
-            async def report_progress():
-                while not progress_done.is_set():
-                    elapsed = time.time() - start_time
-                    done = sum(downloaded_per_chunk)
-                    speed = int(done / elapsed) if elapsed > 0 else 0
-                    pct = (done / total_bytes * 100) if total_bytes > 0 else 0
-                    eta = int((total_bytes - done) / speed) if speed > 0 else 0
-
-                    if db_updater:
-                        await db_updater(
-                            download_id,
-                            downloaded_bytes=done,
-                            progress_pct=round(pct, 2),
-                            speed_bps=speed,
-                        )
-                    await _broadcast(download_id, {
-                        "progress": round(pct, 2),
-                        "speed_bps": speed,
-                        "downloaded_bytes": done,
-                        "total_bytes": total_bytes,
-                        "eta_seconds": eta,
-                    })
-                    await asyncio.sleep(1)
-
-            reporter = asyncio.create_task(report_progress())
-
-            try:
-                logger.info(f"[Download #{download_id}] Launching {num_chunks} chunks")
-                tasks = [
-                    asyncio.create_task(download_chunk_with_progress(i, s, e, f))
-                    for i, (s, e, f) in enumerate(chunks)
-                ]
-                results = await asyncio.gather(*tasks, return_exceptions=True)
-                logger.info(f"[Download #{download_id}] All chunks finished, results: {[type(r).__name__ for r in results]}")
-            finally:
-                progress_done.set()
-                reporter.cancel()
-
-            if _cancel_flags.get(download_id):
-                return False
-
-            if any(r is False or isinstance(r, Exception) for r in results):
-                raise RuntimeError("One or more chunks failed")
-
-            # Merge
-            chunk_files = [c[2] for c in chunks]
-            await _merge_chunks(chunk_files, output_path)
-
-            try:
-                os.rmdir(tmp_dir)
-            except OSError:
-                pass
-
-            if db_updater:
-                await db_updater(
-                    download_id,
-                    status="completed",
-                    progress_pct=100.0,
-                    downloaded_bytes=total_bytes,
-                )
-            await _broadcast(download_id, {"status": "completed", "progress": 100.0})
-            return True
+            max_retries = max(0, int(_runtime.get("max_retries", 0)))
+            attempts = max_retries + 1
+            for attempt in range(1, attempts + 1):
+                try:
+                    return await _single_stream_download(
+                        session,
+                        download_id,
+                        url,
+                        output_path,
+                        total_bytes,
+                        tmp_dir,
+                        db_updater,
+                        supports_range,
+                    )
+                except IncompleteDownloadError as e:
+                    if attempt >= attempts:
+                        raise
+                    backoff = min(2 * attempt, 6)
+                    logger.warning(
+                        f"[Download #{download_id}] Incomplete download ({e}); "
+                        f"retrying in {backoff}s ({attempt}/{attempts - 1})"
+                    )
+                    await asyncio.sleep(backoff)
+            raise IncompleteDownloadError("Download failed after retries")
 
     finally:
         # Release semaphore slot if we still hold it (not already released by pause)
@@ -315,6 +212,7 @@ async def _single_stream_download(
     total_bytes: int,
     tmp_dir: str,
     db_updater,
+    supports_range: bool,
 ) -> bool:
     """Fallback single-stream download."""
     logger.info(f"[Download #{download_id}] Single-stream download starting")
@@ -334,7 +232,11 @@ async def _single_stream_download(
         downloaded = os.path.getsize(tmp_file)
 
     headers = {}
-    if downloaded > 0 and total_bytes > 0:
+    if downloaded > 0 and not supports_range:
+        await asyncio.to_thread(os.remove, tmp_file)
+        downloaded = 0
+
+    if downloaded > 0 and supports_range:
         headers["Range"] = f"bytes={downloaded}-"
 
     mode = "ab" if downloaded > 0 else "wb"
@@ -377,18 +279,21 @@ async def _single_stream_download(
                             if elapsed < expected:
                                 await asyncio.sleep(expected - elapsed)
                 except aiohttp.ClientPayloadError as e:
+                    if total_bytes > 0 and downloaded < total_bytes:
+                        raise IncompleteDownloadError(
+                            f"server closed early: expected {total_bytes} bytes, got {downloaded}"
+                        ) from e
                     if downloaded == 0:
                         raise
-                    # Server closed early with wrong Content-Length — common on IPTV
-                    # servers. We received data so treat it as complete.
-                    logger.warning(
-                        f"Download {download_id}: server closed early ({e}), "
-                        f"{downloaded} bytes received — treating as complete"
-                    )
 
-        os.rename(tmp_file, output_path)
+        if total_bytes > 0 and downloaded < total_bytes:
+            raise IncompleteDownloadError(
+                f"incomplete download: expected {total_bytes} bytes, got {downloaded}"
+            )
+
+        await asyncio.to_thread(os.rename, tmp_file, output_path)
         try:
-            os.rmdir(tmp_dir)
+            await asyncio.to_thread(os.rmdir, tmp_dir)
         except OSError:
             pass
 

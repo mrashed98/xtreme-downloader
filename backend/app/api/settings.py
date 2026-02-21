@@ -13,6 +13,7 @@ _DEFAULTS = {
     "max_concurrent_downloads": "3",
     "download_chunks": "16",
     "speed_limit_bps": "0",
+    "max_retries": "2",
 }
 
 
@@ -24,6 +25,7 @@ async def get_settings(db: AsyncSession = Depends(get_db)):
         max_concurrent_downloads=int(rows.get("max_concurrent_downloads", _DEFAULTS["max_concurrent_downloads"])),
         download_chunks=int(rows.get("download_chunks", _DEFAULTS["download_chunks"])),
         speed_limit_bps=int(rows.get("speed_limit_bps", _DEFAULTS["speed_limit_bps"])),
+        max_retries=int(rows.get("max_retries", _DEFAULTS["max_retries"])),
     )
 
 
@@ -33,6 +35,7 @@ async def update_settings(body: SettingsRequest, db: AsyncSession = Depends(get_
         "max_concurrent_downloads": str(body.max_concurrent_downloads),
         "download_chunks": str(body.download_chunks),
         "speed_limit_bps": str(body.speed_limit_bps),
+        "max_retries": str(body.max_retries),
     }
     for key, value in updates.items():
         result = await db.execute(select(AppSetting).where(AppSetting.key == key))
@@ -47,9 +50,11 @@ async def update_settings(body: SettingsRequest, db: AsyncSession = Depends(get_
         max_concurrent=body.max_concurrent_downloads,
         download_chunks=body.download_chunks,
         speed_limit_bps=body.speed_limit_bps,
+        max_retries=body.max_retries,
     )
     return SettingsResponse(
         max_concurrent_downloads=body.max_concurrent_downloads,
         download_chunks=body.download_chunks,
         speed_limit_bps=body.speed_limit_bps,
+        max_retries=body.max_retries,
     )

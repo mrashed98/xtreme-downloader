@@ -230,6 +230,7 @@ export interface DownloadSettings {
   max_concurrent_downloads: number;
   download_chunks: number;
   speed_limit_bps: number;
+  max_retries: number;
 }
 
 export const settingsApi = {

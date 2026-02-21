@@ -36,6 +36,7 @@ async def lifespan(app: FastAPI):
                     max_concurrent=int(rows.get("max_concurrent_downloads", settings.max_concurrent_downloads)),
                     download_chunks=int(rows.get("download_chunks", settings.download_chunks)),
                     speed_limit_bps=int(rows.get("speed_limit_bps", 0)),
+                    max_retries=int(rows.get("max_retries", settings.max_retries)),
                 )
     except Exception as e:
         logger.warning(f"Could not load settings from DB (first boot?): {e}")
