@@ -31,7 +31,6 @@ def _safe_filename(name: str) -> str:
 
 async def _queue_episode_downloads(
     db: AsyncSession,
-    background_tasks: BackgroundTasks,
     playlist,
     series,
     episodes: list,
@@ -72,7 +71,7 @@ async def _queue_episode_downloads(
             language=language,
             file_path=file_path,
             status=DownloadStatus.queued,
-            chunks=dl_service.get_download_settings()["download_chunks"],
+            chunks=1,
         )
         db.add(download)
         queued.append((download, ep.episode_id, ext))
@@ -82,7 +81,8 @@ async def _queue_episode_downloads(
         for download, ep_id, ext in queued:
             await db.refresh(download)
             url = client.build_series_url(ep_id, ext)
-            background_tasks.add_task(_run_download, download.id, url, download.file_path)
+            task = asyncio.create_task(_run_download(download.id, url, download.file_path))
+            dl_service.register_task(download.id, task)
 
     return len(queued)
 
@@ -343,9 +343,7 @@ async def track_series(
 
     queued_count = 0
     if playlist and episodes:
-        queued_count = await _queue_episode_downloads(
-            db, background_tasks, playlist, series, episodes, body.language
-        )
+        queued_count = await _queue_episode_downloads(db, playlist, series, episodes, body.language)
 
     return TrackResponse(
         id=tracking.id,
@@ -421,7 +419,7 @@ async def patch_episode(
             )
             tracking = t_result.scalars().first()
             language = tracking.language if tracking else "English"
-            await _queue_episode_downloads(db, background_tasks, playlist, series, [episode], language)
+            await _queue_episode_downloads(db, playlist, series, [episode], language)
     else:
         result = await db.execute(
             select(Download).where(
@@ -509,7 +507,8 @@ async def download_series(
     for download, ep_id, ext in downloads:
         await db.refresh(download)
         url = client.build_series_url(ep_id, ext)
-        background_tasks.add_task(_run_download, download.id, url, download.file_path)
+        task = asyncio.create_task(_run_download(download.id, url, download.file_path))
+        dl_service.register_task(download.id, task)
 
     return [d for d, _, _ in downloads]
 

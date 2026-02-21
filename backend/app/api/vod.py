@@ -160,7 +160,8 @@ async def download_vod(
     client = XtreamClient(playlist.base_url, playlist.username, playlist.password)
     url = client.build_vod_url(stream_id, ext)
 
-    background_tasks.add_task(_run_download, download.id, url, file_path)
+    task = asyncio.create_task(_run_download(download.id, url, file_path))
+    dl_service.register_task(download.id, task)
     return download
 
 
