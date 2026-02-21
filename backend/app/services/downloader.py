@@ -22,10 +22,10 @@ _slot_active: set[int] = set()  # downloads currently holding a semaphore slot
 _ws_manager: "WSManager | None" = None
 
 _runtime = {
-    "max_concurrent_downloads": 3,
-    "download_chunks": 16,
+    "max_concurrent_downloads": 1,
+    "download_chunks": 1,
     "speed_limit_bps": 0,
-    "max_retries": 2,
+    "max_retries": 5,
 }
 
 
@@ -33,7 +33,7 @@ class IncompleteDownloadError(RuntimeError):
     pass
 
 
-def init_downloader(max_concurrent: int = 3):
+def init_downloader(max_concurrent: int = 1):
     global _download_semaphore
     _runtime["max_concurrent_downloads"] = max_concurrent
     _download_semaphore = asyncio.Semaphore(max_concurrent)
