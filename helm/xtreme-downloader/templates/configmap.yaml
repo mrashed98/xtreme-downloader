@@ -1,0 +1,17 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: xtreme-config
+  namespace: {{ .Values.namespace }}
+data:
+  MEDIA_PATH: /media
+  POSTGRES_HOST: {{ .Values.postgres.host }}
+  POSTGRES_PORT: {{ .Values.postgres.port | quote }}
+  POSTGRES_DB: {{ .Values.postgres.database }}
+  POSTGRES_USER: {{ .Values.postgres.username }}
+  REDIS_URL: redis://{{ .Values.redis.host }}:{{ .Values.redis.port }}/0
+  DEBUG: {{ .Values.backend.env.DEBUG | quote }}
+  MAX_CONCURRENT_DOWNLOADS: {{ .Values.backend.env.MAX_CONCURRENT_DOWNLOADS | quote }}
+  DOWNLOAD_CHUNKS: {{ .Values.backend.env.DOWNLOAD_CHUNKS | quote }}
+  SYNC_INTERVAL_HOURS: {{ .Values.backend.env.SYNC_INTERVAL_HOURS | quote }}
+  TRACKER_INTERVAL_HOURS: {{ .Values.backend.env.TRACKER_INTERVAL_HOURS | quote }}

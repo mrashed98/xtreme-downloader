@@ -1,0 +1,78 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: backend
+  namespace: {{ .Values.namespace }}
+  labels:
+    app: backend
+spec:
+  replicas: {{ .Values.backend.replicaCount }}
+  selector:
+    matchLabels:
+      app: backend
+  template:
+    metadata:
+      labels:
+        app: backend
+    spec:
+      # Wait for the DB provisioning Job to complete before starting
+      initContainers:
+        - name: migrate
+          image: {{ .Values.backend.image.repository }}:{{ .Values.backend.image.tag }}
+          command: ["sh", "-c", "cd /app && alembic upgrade head"]
+          envFrom:
+            - configMapRef:
+                name: xtreme-config
+          env:
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: xtreme-secrets
+                  key: postgres-password
+            # K8s resolves $(VAR) in env values using earlier entries in the same list
+            - name: DATABASE_URL
+              value: "postgresql+asyncpg://{{ .Values.postgres.username }}:$(POSTGRES_PASSWORD)@{{ .Values.postgres.host }}:{{ .Values.postgres.port }}/{{ .Values.postgres.database }}"
+            - name: SYNC_DATABASE_URL
+              value: "postgresql+psycopg2://{{ .Values.postgres.username }}:$(POSTGRES_PASSWORD)@{{ .Values.postgres.host }}:{{ .Values.postgres.port }}/{{ .Values.postgres.database }}"
+
+      containers:
+        - name: backend
+          image: {{ .Values.backend.image.repository }}:{{ .Values.backend.image.tag }}
+          imagePullPolicy: {{ .Values.backend.image.pullPolicy }}
+          ports:
+            - containerPort: 8000
+          envFrom:
+            - configMapRef:
+                name: xtreme-config
+          env:
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: xtreme-secrets
+                  key: postgres-password
+            - name: DATABASE_URL
+              value: "postgresql+asyncpg://{{ .Values.postgres.username }}:$(POSTGRES_PASSWORD)@{{ .Values.postgres.host }}:{{ .Values.postgres.port }}/{{ .Values.postgres.database }}"
+            - name: SYNC_DATABASE_URL
+              value: "postgresql+psycopg2://{{ .Values.postgres.username }}:$(POSTGRES_PASSWORD)@{{ .Values.postgres.host }}:{{ .Values.postgres.port }}/{{ .Values.postgres.database }}"
+          volumeMounts:
+            - name: media
+              mountPath: /media
+          resources:
+            {{- toYaml .Values.backend.resources | nindent 12 }}
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 15
+            periodSeconds: 30
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 5
+            periodSeconds: 10
+      volumes:
+        - name: media
+          persistentVolumeClaim:
+            claimName: xtreme-media-pvc

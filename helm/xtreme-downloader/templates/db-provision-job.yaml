@@ -1,0 +1,82 @@
+---
+# Helm hook Job: runs before the Deployment to ensure the 'xtreme' database
+# and user exist on the shared PostgreSQL instance.
+#
+# Runs on: install + upgrade (idempotent — uses IF NOT EXISTS guards).
+# Deleted: before the next hook run (before-hook-creation policy).
+#
+# Requires in xtreme-secrets SealedSecret:
+#   postgres-admin-password  → postgres superuser (to CREATE DATABASE / CREATE USER)
+#   postgres-password        → password to set/keep for the 'xtreme' user
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: db-provision
+  namespace: {{ .Values.namespace }}
+  annotations:
+    "helm.sh/hook": pre-install,pre-upgrade
+    "helm.sh/hook-weight": "-10"
+    "helm.sh/hook-delete-policy": before-hook-creation
+spec:
+  backoffLimit: 4
+  template:
+    spec:
+      restartPolicy: OnFailure
+      containers:
+        - name: provision
+          image: postgres:15-alpine
+          command:
+            - sh
+            - -c
+            - |
+              set -e
+
+              ADMIN_URL="postgresql://postgres:${POSTGRES_ADMIN_PASSWORD}@{{ .Values.postgres.host }}:{{ .Values.postgres.port }}/postgres"
+
+              echo "Waiting for PostgreSQL to be ready..."
+              until pg_isready -h {{ .Values.postgres.host }} -p {{ .Values.postgres.port }} -U postgres; do
+                sleep 2
+              done
+              echo "PostgreSQL is ready."
+
+              echo "Provisioning user '{{ .Values.postgres.username }}'..."
+              psql "$ADMIN_URL" <<-EOSQL
+                DO \$\$
+                BEGIN
+                  IF NOT EXISTS (
+                    SELECT FROM pg_catalog.pg_roles WHERE rolname = '{{ .Values.postgres.username }}'
+                  ) THEN
+                    CREATE USER {{ .Values.postgres.username }} WITH PASSWORD '${POSTGRES_PASSWORD}';
+                    RAISE NOTICE 'User {{ .Values.postgres.username }} created.';
+                  ELSE
+                    -- Update password on upgrade in case it changed
+                    ALTER USER {{ .Values.postgres.username }} WITH PASSWORD '${POSTGRES_PASSWORD}';
+                    RAISE NOTICE 'User {{ .Values.postgres.username }} already exists, password updated.';
+                  END IF;
+                END
+                \$\$;
+              EOSQL
+
+              echo "Provisioning database '{{ .Values.postgres.database }}'..."
+              psql "$ADMIN_URL" <<-EOSQL
+                SELECT 'CREATE DATABASE {{ .Values.postgres.database }} OWNER {{ .Values.postgres.username }}'
+                WHERE NOT EXISTS (
+                  SELECT FROM pg_database WHERE datname = '{{ .Values.postgres.database }}'
+                )\gexec
+              EOSQL
+
+              echo "Granting privileges..."
+              psql "$ADMIN_URL" -c "GRANT ALL PRIVILEGES ON DATABASE {{ .Values.postgres.database }} TO {{ .Values.postgres.username }};"
+
+              echo "Database provisioning complete."
+          env:
+            - name: POSTGRES_ADMIN_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: xtreme-secrets
+                  key: postgres-admin-password
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: xtreme-secrets
+                  key: postgres-password

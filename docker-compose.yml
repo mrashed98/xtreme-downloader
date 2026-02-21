@@ -1,0 +1,66 @@
+version: "3.9"
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_DB: xtreme
+      POSTGRES_USER: xtreme
+      POSTGRES_PASSWORD: xtreme
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U xtreme"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  backend:
+    build: ./backend
+    ports:
+      - "8000:8000"
+    environment:
+      DATABASE_URL: postgresql+asyncpg://xtreme:xtreme@postgres:5432/xtreme
+      SYNC_DATABASE_URL: postgresql+psycopg2://xtreme:xtreme@postgres:5432/xtreme
+      REDIS_URL: redis://redis:6379/0
+      MEDIA_PATH: /media
+      DEBUG: "false"
+    volumes:
+      - media_data:/media
+    depends_on:
+      postgres:
+        condition: service_healthy
+    command: >
+      sh -c "
+        cd /app &&
+        alembic upgrade head &&
+        uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+      "
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8000/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  frontend:
+    build: ./frontend
+    ports:
+      - "3000:80"
+    depends_on:
+      - backend
+
+volumes:
+  postgres_data:
+  media_data:
