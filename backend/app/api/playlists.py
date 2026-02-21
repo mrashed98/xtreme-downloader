@@ -1,7 +1,10 @@
+import logging
 from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
 from sqlalchemy import select, delete
 from sqlalchemy.ext.asyncio import AsyncSession
 from datetime import datetime
+
+logger = logging.getLogger(__name__)
 
 from app.database import get_db
 from app.models.playlist import Playlist, Category, CategoryType
@@ -73,6 +76,7 @@ async def sync_playlist(
     if not playlist:
         raise HTTPException(404, "Playlist not found")
     if playlist.sync_status == "syncing":
+        logger.info(f"Playlist {playlist_id} sync requested but already syncing — skipping")
         return playlist  # already running — return current state, don't double-queue
 
     background_tasks.add_task(_sync_playlist_bg, playlist_id)
@@ -81,10 +85,26 @@ async def sync_playlist(
 
 async def _sync_playlist_bg(playlist_id: int):
     from app.database import AsyncSessionLocal
-    from sqlalchemy import select
+    from sqlalchemy import select, update
 
     async with AsyncSessionLocal() as db:
         result = await db.execute(select(Playlist).where(Playlist.id == playlist_id))
         playlist = result.scalar_one_or_none()
-        if playlist:
+        if not playlist:
+            return
+        try:
             await _sync_playlist(db, playlist)
+        except Exception:
+            # _sync_playlist sets sync_status="error" and re-raises on failure.
+            # If its own error handler also failed, use a fresh session to ensure
+            # the status is never left stuck at "syncing".
+            try:
+                async with AsyncSessionLocal() as db2:
+                    await db2.execute(
+                        update(Playlist)
+                        .where(Playlist.id == playlist_id)
+                        .values(sync_status="error")
+                    )
+                    await db2.commit()
+            except Exception:
+                pass

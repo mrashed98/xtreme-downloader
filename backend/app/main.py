@@ -40,6 +40,29 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.warning(f"Could not load settings from DB (first boot?): {e}")
 
+    # Reset any playlists left stuck in "syncing" from a previous crashed run.
+    # On a fresh start no sync is actually in progress, so stale "syncing"
+    # statuses would block all future manual and scheduled syncs indefinitely.
+    try:
+        from sqlalchemy import update
+        from app.models.playlist import Playlist
+        async with AsyncSessionLocal() as db:
+            result = await db.execute(
+                update(Playlist)
+                .where(Playlist.sync_status == "syncing")
+                .values(sync_status="idle")
+                .returning(Playlist.id)
+            )
+            reset_ids = [row[0] for row in result.fetchall()]
+            await db.commit()
+            if reset_ids:
+                logger.warning(
+                    f"Reset {len(reset_ids)} playlist(s) stuck in 'syncing' state "
+                    f"(ids: {reset_ids}) — likely left over from a previous crash."
+                )
+    except Exception as e:
+        logger.warning(f"Could not reset stale sync statuses: {e}")
+
     start_scheduler()
     yield
     # Shutdown

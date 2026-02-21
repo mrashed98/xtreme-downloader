@@ -146,6 +146,8 @@ export function Dashboard() {
   const { data: playlists = [], refetch } = useQuery({
     queryKey: ["playlists"],
     queryFn: playlistsApi.list,
+    refetchInterval: (query) =>
+      query.state.data?.some((p) => p.sync_status === "syncing") ? 2000 : false,
   });
 
   const { data: downloads = [] } = useQuery({
@@ -234,10 +236,15 @@ export function Dashboard() {
                 <div className="flex items-center gap-2">
                   <button
                     onClick={() => handleSync(p.id)}
-                    className="p-1.5 rounded-lg hover:bg-white/10 text-white/40 hover:text-white transition-colors"
-                    title="Sync"
+                    disabled={p.sync_status === "syncing"}
+                    className={`p-1.5 rounded-lg transition-colors ${
+                      p.sync_status === "syncing"
+                        ? "text-blue-400 cursor-not-allowed"
+                        : "hover:bg-white/10 text-white/40 hover:text-white"
+                    }`}
+                    title={p.sync_status === "syncing" ? "Syncing..." : "Sync"}
                   >
-                    <RefreshCw size={14} />
+                    <RefreshCw size={14} className={p.sync_status === "syncing" ? "animate-spin" : ""} />
                   </button>
                   <button
                     onClick={() => { setEditPlaylist(p); setShowModal(true); }}
