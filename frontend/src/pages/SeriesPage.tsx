@@ -1,8 +1,8 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useRef, useEffect } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Search, Clapperboard, X, Download, BookmarkPlus, BookmarkCheck,
-  ChevronDown, ChevronRight, Heart, ExternalLink, Star, Users, Play,
+  ChevronDown, ChevronRight, Heart, ExternalLink, Star, Users, Play, Check,
 } from "lucide-react";
 import { seriesApi, favoritesApi, type Series, type Season, type Episode } from "../api/client";
 import { useAppStore, type PlayerItem } from "../store";
@@ -320,12 +320,26 @@ export function SeriesPage() {
   const [search, setSearch] = useState("");
   const [language, setLanguage] = useState("");
   const [genre, setGenre] = useState("");
-  const [cast, setCast] = useState("");
+  const [selectedActors, setSelectedActors] = useState<string[]>([]);
+  const [actorSearch, setActorSearch] = useState("");
+  const [actorOpen, setActorOpen] = useState(false);
+  const actorRef = useRef<HTMLDivElement>(null);
   const [ratingMin, setRatingMin] = useState<number | undefined>();
   const [favoritesOnly, setFavoritesOnly] = useState(false);
   const [selectedSeries, setSelectedSeries] = useState<Series | null>(null);
   const [page, setPage] = useState(0);
   const limit = 60;
+
+  useEffect(() => {
+    if (!actorOpen) return;
+    function handleClickOutside(e: MouseEvent) {
+      if (actorRef.current && !actorRef.current.contains(e.target as Node)) {
+        setActorOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [actorOpen]);
 
   const { data: categories = [] } = useQuery({
     queryKey: ["series-cats", activePlaylistId],
@@ -334,14 +348,14 @@ export function SeriesPage() {
   });
 
   const { data: seriesList = [], isLoading } = useQuery({
-    queryKey: ["series-list", activePlaylistId, selectedCategory, search, language, genre, cast, ratingMin, page],
+    queryKey: ["series-list", activePlaylistId, selectedCategory, search, language, genre, selectedActors, ratingMin, page],
     queryFn: () =>
       seriesApi.list(activePlaylistId!, {
         category_id: selectedCategory || undefined,
         search: search || undefined,
         language: language || undefined,
         genre: genre || undefined,
-        cast: cast || undefined,
+        cast: selectedActors.length ? selectedActors.join(",") : undefined,
         rating_min: ratingMin,
         limit,
         offset: page * limit,
@@ -451,16 +465,80 @@ export function SeriesPage() {
             ))}
           </select>
 
-          <select
-            className="glass-input text-sm"
-            value={cast}
-            onChange={(e) => { setCast(e.target.value); setPage(0); }}
-          >
-            <option value="">All actors</option>
-            {actors.map((a) => (
-              <option key={a} value={a} className="bg-gray-900">{a}</option>
-            ))}
-          </select>
+          <div className="relative" ref={actorRef}>
+            <button
+              onClick={() => setActorOpen((v) => !v)}
+              className={`glass-input text-sm flex items-center gap-2 min-w-36 ${
+                selectedActors.length ? "text-white" : "text-white/50"
+              }`}
+            >
+              <Users size={13} className="flex-shrink-0" />
+              <span className="truncate">
+                {selectedActors.length === 0
+                  ? "All actors"
+                  : selectedActors.length === 1
+                  ? selectedActors[0]
+                  : `${selectedActors.length} actors`}
+              </span>
+              <ChevronDown size={12} className="ml-auto flex-shrink-0" />
+            </button>
+
+            {actorOpen && (
+              <div className="absolute top-full mt-1 left-0 z-30 w-64 glass-card rounded-xl shadow-xl border border-white/10 overflow-hidden">
+                <div className="p-2 border-b border-white/10 space-y-1.5">
+                  <div className="relative">
+                    <Search size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-white/30" />
+                    <input
+                      className="w-full glass-input pl-8 py-1.5 text-xs"
+                      placeholder="Search actors..."
+                      value={actorSearch}
+                      onChange={(e) => setActorSearch(e.target.value)}
+                      autoFocus
+                    />
+                  </div>
+                  {selectedActors.length > 0 && (
+                    <button
+                      onClick={() => { setSelectedActors([]); setPage(0); }}
+                      className="text-xs text-white/40 hover:text-white px-1"
+                    >
+                      Clear all ({selectedActors.length})
+                    </button>
+                  )}
+                </div>
+                <div className="max-h-60 overflow-y-auto">
+                  {(actorSearch
+                    ? actors.filter((a) => a.toLowerCase().includes(actorSearch.toLowerCase()))
+                    : actors
+                  ).map((actor) => (
+                    <button
+                      key={actor}
+                      onClick={() => {
+                        setSelectedActors((prev) =>
+                          prev.includes(actor) ? prev.filter((a) => a !== actor) : [...prev, actor]
+                        );
+                        setPage(0);
+                      }}
+                      className={`w-full flex items-center gap-2.5 px-3 py-2 text-sm text-left transition-colors hover:bg-white/5 ${
+                        selectedActors.includes(actor) ? "text-purple-300" : "text-white/70"
+                      }`}
+                    >
+                      <div className={`w-4 h-4 rounded border flex-shrink-0 flex items-center justify-center transition-colors ${
+                        selectedActors.includes(actor)
+                          ? "bg-purple-500 border-purple-500"
+                          : "border-white/20"
+                      }`}>
+                        {selectedActors.includes(actor) && <Check size={10} className="text-white" />}
+                      </div>
+                      <span className="truncate">{actor}</span>
+                    </button>
+                  ))}
+                  {actors.filter((a) => a.toLowerCase().includes(actorSearch.toLowerCase())).length === 0 && actorSearch && (
+                    <p className="text-xs text-white/30 text-center py-4">No actors found</p>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
 
           <select
             className="glass-input text-sm"

@@ -66,7 +66,10 @@ async def get_series(
     if genre:
         query = query.where(Series.genre.ilike(f"%{genre}%"))
     if cast:
-        query = query.where(Series.cast.ilike(f"%{cast}%"))
+        for actor in cast.split(","):
+            actor = actor.strip()
+            if actor:
+                query = query.where(Series.cast.ilike(f"%{actor}%"))
     if rating_min is not None:
         query = query.where(Series.rating >= rating_min)
     if search:

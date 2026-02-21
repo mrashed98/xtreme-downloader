@@ -36,7 +36,7 @@ class VodStream(Base):
     director: Mapped[str | None] = mapped_column(String(512), nullable=True)
     rating: Mapped[float | None] = mapped_column(Float, nullable=True)
     plot: Mapped[str | None] = mapped_column(Text, nullable=True)
-    duration: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    duration: Mapped[str | None] = mapped_column(String(64), nullable=True)
     language: Mapped[str | None] = mapped_column(String(128), nullable=True)
 
     playlist: Mapped["Playlist"] = relationship("Playlist", back_populates="vod_streams")
@@ -57,8 +57,8 @@ class Series(Base):
     plot: Mapped[str | None] = mapped_column(Text, nullable=True)
     rating: Mapped[float | None] = mapped_column(Float, nullable=True)
     language: Mapped[str | None] = mapped_column(String(128), nullable=True)
-    youtube_trailer: Mapped[str | None] = mapped_column(String(64), nullable=True)
-    release_date: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    youtube_trailer: Mapped[str | None] = mapped_column(Text, nullable=True)
+    release_date: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     playlist: Mapped["Playlist"] = relationship("Playlist", back_populates="series")
     seasons: Mapped[list["Season"]] = relationship("Season", back_populates="series", cascade="all, delete-orphan")
@@ -90,6 +90,6 @@ class Episode(Base):
     title: Mapped[str | None] = mapped_column(String(512), nullable=True)
     container_extension: Mapped[str | None] = mapped_column(String(16), nullable=True)
     added: Mapped[str | None] = mapped_column(String(64), nullable=True)
-    duration: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    duration: Mapped[str | None] = mapped_column(String(64), nullable=True)
 
     series: Mapped["Series"] = relationship("Series", back_populates="episodes")

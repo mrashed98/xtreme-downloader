@@ -2,8 +2,12 @@
 from __future__ import annotations
 import aiohttp
 import asyncio
+import logging
+import time
 from typing import Any
 from urllib.parse import urljoin
+
+logger = logging.getLogger(__name__)
 
 
 class XtreamClient:
@@ -34,9 +38,21 @@ class XtreamClient:
 
     async def _get(self, **params) -> Any:
         url = self._api_url(**params)
-        async with self.session.get(url) as resp:
-            resp.raise_for_status()
-            return await resp.json(content_type=None)
+        action = params.get("action", "unknown")
+        logger.info(f"Xtream API → {action} ({self.base_url})")
+        t0 = time.monotonic()
+        try:
+            async with self.session.get(url) as resp:
+                resp.raise_for_status()
+                data = await resp.json(content_type=None)
+                elapsed = time.monotonic() - t0
+                count = len(data) if isinstance(data, (list, dict)) else "?"
+                logger.info(f"Xtream API ← {action} {resp.status} — {count} items in {elapsed:.1f}s")
+                return data
+        except Exception as e:
+            elapsed = time.monotonic() - t0
+            logger.error(f"Xtream API ✗ {action} failed after {elapsed:.1f}s: {e}")
+            raise
 
     def _normalize_list(self, data: Any) -> list:
         """Handle Xtream's inconsistent numbered-key objects vs proper arrays."""

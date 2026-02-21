@@ -60,6 +60,7 @@ async def _sync_playlist(db, playlist):
     try:
         # ── Live categories ──────────────────────────────────────────────────
         live_cats = await client.get_live_categories()
+        logger.info(f"[{playlist.name}] Upserting {len(live_cats)} live categories")
         for cat in live_cats:
             stmt = pg_insert(Category).values(
                 playlist_id=playlist.id,
@@ -74,6 +75,7 @@ async def _sync_playlist(db, playlist):
 
         # ── Live streams ─────────────────────────────────────────────────────
         live_streams = await client.get_live_streams()
+        logger.info(f"[{playlist.name}] Upserting {len(live_streams)} live streams")
         for s in live_streams:
             stmt = pg_insert(LiveStream).values(
                 playlist_id=playlist.id,
@@ -96,6 +98,7 @@ async def _sync_playlist(db, playlist):
 
         # ── VOD categories ───────────────────────────────────────────────────
         vod_cats = await client.get_vod_categories()
+        logger.info(f"[{playlist.name}] Upserting {len(vod_cats)} VOD categories")
         for cat in vod_cats:
             stmt = pg_insert(Category).values(
                 playlist_id=playlist.id,
@@ -110,6 +113,7 @@ async def _sync_playlist(db, playlist):
 
         # ── VOD streams ──────────────────────────────────────────────────────
         vod_streams = await client.get_vod_streams()
+        logger.info(f"[{playlist.name}] Upserting {len(vod_streams)} VOD streams")
         for s in vod_streams:
             rating = _safe_float(s.get("rating"))
             stmt = pg_insert(VodStream).values(
