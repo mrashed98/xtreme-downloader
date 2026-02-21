@@ -29,11 +29,6 @@ spec:
                 secretKeyRef:
                   name: xtreme-secrets
                   key: postgres-password
-            # K8s resolves $(VAR) in env values using earlier entries in the same list
-            - name: DATABASE_URL
-              value: "postgresql+asyncpg://{{ .Values.postgres.username }}:$(POSTGRES_PASSWORD)@{{ .Values.postgres.host }}:{{ .Values.postgres.port }}/{{ .Values.postgres.database }}"
-            - name: SYNC_DATABASE_URL
-              value: "postgresql+psycopg2://{{ .Values.postgres.username }}:$(POSTGRES_PASSWORD)@{{ .Values.postgres.host }}:{{ .Values.postgres.port }}/{{ .Values.postgres.database }}"
 
       containers:
         - name: backend
@@ -50,10 +45,6 @@ spec:
                 secretKeyRef:
                   name: xtreme-secrets
                   key: postgres-password
-            - name: DATABASE_URL
-              value: "postgresql+asyncpg://{{ .Values.postgres.username }}:$(POSTGRES_PASSWORD)@{{ .Values.postgres.host }}:{{ .Values.postgres.port }}/{{ .Values.postgres.database }}"
-            - name: SYNC_DATABASE_URL
-              value: "postgresql+psycopg2://{{ .Values.postgres.username }}:$(POSTGRES_PASSWORD)@{{ .Values.postgres.host }}:{{ .Values.postgres.port }}/{{ .Values.postgres.database }}"
           volumeMounts:
             - name: media
               mountPath: /media
