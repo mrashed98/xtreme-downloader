@@ -61,6 +61,7 @@ export interface Episode {
   title: string | null;
   container_extension: string | null;
   duration: string | null;
+  monitored: boolean;
 }
 
 export interface Season {
@@ -124,6 +125,7 @@ export interface Tracking {
   track_all_seasons: boolean;
   seasons_json: number[] | null;
   last_checked_at: string | null;
+  queued_count?: number;
 }
 
 // Playlist API
@@ -199,6 +201,8 @@ export const seriesApi = {
     seriesId: string,
     data: { language: string; season_num?: number; episode_ids?: string[] }
   ) => api.post<Download[]>(`/series/${playlistId}/${seriesId}/download`, data).then((r) => r.data),
+  patchEpisode: (playlistId: number, seriesId: string, episodeId: string, data: { monitored: boolean }) =>
+    api.patch<Episode>(`/series/${playlistId}/${seriesId}/episodes/${episodeId}`, data).then((r) => r.data),
 };
 
 // Favorites API

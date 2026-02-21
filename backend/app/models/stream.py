@@ -1,5 +1,5 @@
 from datetime import datetime
-from sqlalchemy import String, Integer, ForeignKey, Float, Text, DateTime, BigInteger
+from sqlalchemy import String, Integer, ForeignKey, Float, Text, DateTime, BigInteger, Boolean
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.database import Base
 
@@ -91,5 +91,6 @@ class Episode(Base):
     container_extension: Mapped[str | None] = mapped_column(String(16), nullable=True)
     added: Mapped[str | None] = mapped_column(String(64), nullable=True)
     duration: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    monitored: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
 
     series: Mapped["Series"] = relationship("Series", back_populates="episodes")

@@ -1,5 +1,6 @@
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { Toaster } from "sonner";
 import { Sidebar } from "./components/Layout/Sidebar";
 import { Navbar } from "./components/Layout/Navbar";
 import { VideoPlayer } from "./components/Player/VideoPlayer";
@@ -38,6 +39,7 @@ export default function App() {
           </div>
         </div>
         <VideoPlayer />
+        <Toaster position="bottom-right" theme="dark" richColors />
       </BrowserRouter>
     </QueryClientProvider>
   );

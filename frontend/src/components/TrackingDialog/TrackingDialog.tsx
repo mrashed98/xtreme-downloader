@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { X, BookmarkPlus } from "lucide-react";
+import { toast } from "sonner";
 import type { Series, Season, Tracking } from "../../api/client";
 import { seriesApi } from "../../api/client";
 
@@ -28,14 +29,20 @@ export function TrackingDialog({ series, seasons, tracking, onClose, onTracked }
   const handleSubmit = async () => {
     setLoading(true);
     try {
-      await seriesApi.track(series.playlist_id, series.series_id, {
+      const result = await seriesApi.track(series.playlist_id, series.series_id, {
         language,
         seasons: trackAll ? "all" : selectedSeasons,
       });
+      const count = result.queued_count ?? 0;
+      toast.success(
+        count > 0
+          ? `Now tracking ${series.name} · ${count} episode${count === 1 ? "" : "s"} queued`
+          : `Now tracking ${series.name}`
+      );
       onTracked();
       onClose();
-    } catch (err) {
-      console.error("Track failed:", err);
+    } catch {
+      toast.error("Failed to save tracking");
     } finally {
       setLoading(false);
     }

@@ -12,7 +12,7 @@ from app.models.download import Download, DownloadStatus, ContentType
 from app.models.tracking import SeriesTracking
 from app.schemas.playlist import CategoryResponse
 from app.schemas.stream import SeriesResponse, SeriesDetailResponse, SeasonResponse, EpisodeResponse, StreamUrlResponse
-from app.schemas.download import SeriesDownloadRequest, SeriesTrackRequest, TrackingResponse, DownloadResponse
+from app.schemas.download import SeriesDownloadRequest, SeriesTrackRequest, TrackingResponse, TrackResponse, DownloadResponse, PatchEpisodeRequest
 from app.services.xtream import XtreamClient
 from app.services import downloader as dl_service
 from app.config import get_settings
@@ -27,6 +27,64 @@ def _safe_filename(name: str) -> str:
     for ch in invalid:
         name = name.replace(ch, "_")
     return name.strip()
+
+
+async def _queue_episode_downloads(
+    db: AsyncSession,
+    background_tasks: BackgroundTasks,
+    playlist,
+    series,
+    episodes: list,
+    language: str,
+) -> int:
+    """Queue downloads for the given episodes, skipping active/completed or unmonitored ones."""
+    active_statuses = [DownloadStatus.queued, DownloadStatus.downloading, DownloadStatus.paused, DownloadStatus.completed]
+    result = await db.execute(
+        select(Download.stream_id).where(
+            Download.playlist_id == playlist.id,
+            Download.content_type == ContentType.series,
+            Download.status.in_(active_statuses),
+        )
+    )
+    already_active = {row[0] for row in result.all()}
+
+    client = XtreamClient(playlist.base_url, playlist.username, playlist.password)
+    queued = []
+
+    for ep in episodes:
+        if not ep.monitored or ep.episode_id in already_active:
+            continue
+
+        ext = ep.container_extension or "mkv"
+        ep_num = ep.episode_num or 0
+        title = ep.title or f"Episode {ep_num}"
+        file_path = os.path.join(
+            settings.media_path, "Series", language,
+            _safe_filename(series.name),
+            f"Season {ep.season_num}",
+            f"{_safe_filename(title)}.{ext}",
+        )
+        download = Download(
+            playlist_id=playlist.id,
+            content_type=ContentType.series,
+            stream_id=ep.episode_id,
+            title=f"{series.name} S{ep.season_num:02d}E{ep_num:02d} - {title}",
+            language=language,
+            file_path=file_path,
+            status=DownloadStatus.queued,
+            chunks=dl_service.get_download_settings()["download_chunks"],
+        )
+        db.add(download)
+        queued.append((download, ep.episode_id, ext))
+
+    if queued:
+        await db.commit()
+        for download, ep_id, ext in queued:
+            await db.refresh(download)
+            url = client.build_series_url(ep_id, ext)
+            background_tasks.add_task(_run_download, download.id, url, download.file_path)
+
+    return len(queued)
 
 
 @router.get("/{playlist_id}/categories", response_model=list[CategoryResponse])
@@ -224,11 +282,12 @@ async def get_tracking(
     return result.scalars().first()
 
 
-@router.post("/{playlist_id}/{series_id}/track", response_model=TrackingResponse, status_code=201)
+@router.post("/{playlist_id}/{series_id}/track", response_model=TrackResponse, status_code=201)
 async def track_series(
     playlist_id: int,
     series_id: str,
     body: SeriesTrackRequest,
+    background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
 ):
     result = await db.execute(
@@ -266,7 +325,39 @@ async def track_series(
 
     await db.commit()
     await db.refresh(tracking)
-    return tracking
+
+    # Determine which seasons to queue
+    tracked_seasons: set[int] | None = None
+    if not track_all and seasons_list:
+        tracked_seasons = set(seasons_list)
+
+    # Load existing monitored episodes in those seasons
+    ep_query = select(Episode).where(Episode.series_id == series.id, Episode.monitored == True)
+    if tracked_seasons is not None:
+        ep_query = ep_query.where(Episode.season_num.in_(tracked_seasons))
+    ep_result = await db.execute(ep_query)
+    episodes = ep_result.scalars().all()
+
+    pl_result = await db.execute(select(Playlist).where(Playlist.id == playlist_id))
+    playlist = pl_result.scalar_one_or_none()
+
+    queued_count = 0
+    if playlist and episodes:
+        queued_count = await _queue_episode_downloads(
+            db, background_tasks, playlist, series, episodes, body.language
+        )
+
+    return TrackResponse(
+        id=tracking.id,
+        series_id=tracking.series_id,
+        playlist_id=tracking.playlist_id,
+        language=tracking.language,
+        track_all_seasons=tracking.track_all_seasons,
+        seasons_json=tracking.seasons_json,
+        last_checked_at=tracking.last_checked_at,
+        created_at=tracking.created_at,
+        queued_count=queued_count,
+    )
 
 
 @router.delete("/{playlist_id}/{series_id}/track", status_code=204)
@@ -289,6 +380,62 @@ async def untrack_series(
         )
     )
     await db.commit()
+
+
+@router.patch("/{playlist_id}/{series_id}/episodes/{episode_id}", response_model=EpisodeResponse)
+async def patch_episode(
+    playlist_id: int,
+    series_id: str,
+    episode_id: str,
+    body: PatchEpisodeRequest,
+    background_tasks: BackgroundTasks,
+    db: AsyncSession = Depends(get_db),
+):
+    result = await db.execute(
+        select(Series).where(Series.playlist_id == playlist_id, Series.series_id == series_id)
+    )
+    series = result.scalars().first()
+    if not series:
+        raise HTTPException(404, "Series not found")
+
+    result = await db.execute(
+        select(Episode).where(Episode.series_id == series.id, Episode.episode_id == episode_id)
+    )
+    episode = result.scalars().first()
+    if not episode:
+        raise HTTPException(404, "Episode not found")
+
+    episode.monitored = body.monitored
+    await db.commit()
+    await db.refresh(episode)
+
+    if body.monitored:
+        result = await db.execute(select(Playlist).where(Playlist.id == playlist_id))
+        playlist = result.scalar_one_or_none()
+        if playlist:
+            t_result = await db.execute(
+                select(SeriesTracking).where(
+                    SeriesTracking.series_id == series.id,
+                    SeriesTracking.playlist_id == playlist_id,
+                )
+            )
+            tracking = t_result.scalars().first()
+            language = tracking.language if tracking else "English"
+            await _queue_episode_downloads(db, background_tasks, playlist, series, [episode], language)
+    else:
+        result = await db.execute(
+            select(Download).where(
+                Download.playlist_id == playlist_id,
+                Download.content_type == ContentType.series,
+                Download.stream_id == episode_id,
+                Download.status == DownloadStatus.queued,
+            )
+        )
+        for dl in result.scalars().all():
+            dl.status = DownloadStatus.cancelled
+        await db.commit()
+
+    return episode
 
 
 @router.post("/{playlist_id}/{series_id}/download", response_model=list[DownloadResponse], status_code=201)

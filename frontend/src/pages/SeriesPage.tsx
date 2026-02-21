@@ -3,7 +3,9 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Search, Clapperboard, X, Download, BookmarkPlus, BookmarkCheck,
   ChevronDown, ChevronRight, Heart, ExternalLink, Star, Users, Play, Check,
+  Eye, EyeOff,
 } from "lucide-react";
+import { toast } from "sonner";
 import { seriesApi, favoritesApi, type Series, type Season, type Episode } from "../api/client";
 import { useAppStore, type PlayerItem } from "../store";
 import { CategorySidebar } from "../components/ContentGrid/CategorySidebar";
@@ -105,6 +107,36 @@ function SeriesDetailModal({
         next.delete(ep.episode_id);
         return next;
       });
+    }
+  };
+
+  const handleToggleMonitored = async (ep: Episode, season: Season) => {
+    const newVal = !ep.monitored;
+    // Optimistic update
+    qc.setQueryData(
+      ["series-detail", playlistId, series.series_id],
+      (old: Series | undefined) => {
+        if (!old?.seasons) return old;
+        return {
+          ...old,
+          seasons: old.seasons.map((s) =>
+            s.season_num !== season.season_num ? s : {
+              ...s,
+              episodes: s.episodes.map((e) =>
+                e.episode_id === ep.episode_id ? { ...e, monitored: newVal } : e
+              ),
+            }
+          ),
+        };
+      }
+    );
+    try {
+      await seriesApi.patchEpisode(playlistId, series.series_id, ep.episode_id, { monitored: newVal });
+      if (newVal) toast.success("Episode queued for download");
+      qc.invalidateQueries({ queryKey: ["downloads"] });
+    } catch {
+      toast.error("Failed to update episode");
+      qc.invalidateQueries({ queryKey: ["series-detail", playlistId, series.series_id] });
     }
   };
 
@@ -256,17 +288,30 @@ function SeriesDetailModal({
                   {(season.episodes || []).map((ep: Episode) => (
                     <div
                       key={ep.episode_id}
-                      className="flex items-center gap-3 px-4 py-2.5 hover:bg-white/5 border-b border-white/3 last:border-0 group/ep"
+                      className={`flex items-center gap-3 px-4 py-2.5 hover:bg-white/5 border-b border-white/3 last:border-0 group/ep transition-opacity ${
+                        !ep.monitored ? "opacity-40" : ""
+                      }`}
                     >
                       <span className="text-xs text-white/30 w-8 text-right flex-shrink-0">
                         {ep.episode_num != null ? `E${ep.episode_num.toString().padStart(2, "0")}` : "—"}
                       </span>
-                      <span className="flex-1 text-sm text-white/80 truncate">
+                      <span className={`flex-1 text-sm text-white/80 truncate ${!ep.monitored ? "line-through" : ""}`}>
                         {ep.title || `Episode ${ep.episode_num}`}
                       </span>
                       {ep.duration && (
                         <span className="text-xs text-white/30 hidden sm:block">{ep.duration}</span>
                       )}
+                      <button
+                        onClick={(e) => { e.stopPropagation(); handleToggleMonitored(ep, season); }}
+                        className={`p-1.5 rounded-lg transition-colors ${
+                          ep.monitored
+                            ? "text-purple-400 hover:text-purple-300 hover:bg-purple-500/20"
+                            : "text-white/20 hover:text-white/60 hover:bg-white/10"
+                        }`}
+                        title={ep.monitored ? "Unmonitor episode" : "Monitor episode"}
+                      >
+                        {ep.monitored ? <Eye size={12} /> : <EyeOff size={12} />}
+                      </button>
                       <button
                         onClick={() => handlePlayEpisode(ep, season)}
                         disabled={playingEps.has(ep.episode_id)}
@@ -307,7 +352,10 @@ function SeriesDetailModal({
           seasons={seasons}
           tracking={tracking}
           onClose={() => setShowTracking(false)}
-          onTracked={() => qc.invalidateQueries({ queryKey: ["series-tracking"] })}
+          onTracked={() => {
+            qc.invalidateQueries({ queryKey: ["series-tracking"] });
+            qc.invalidateQueries({ queryKey: ["downloads"] });
+          }}
         />
       )}
     </div>

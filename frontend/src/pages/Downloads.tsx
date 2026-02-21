@@ -308,8 +308,7 @@ export function Downloads() {
           if (!old) return old;
           const found = old.some((dl) => dl.id === data.download_id);
           if (!found) {
-            // Download not in current list (e.g. added while on another tab) — trigger refetch
-            qc.invalidateQueries({ queryKey: ["downloads", tab] });
+            // Not in this tab's filtered list — polling will pick it up
             return old;
           }
           return old.map((dl) =>

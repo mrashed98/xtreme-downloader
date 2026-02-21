@@ -62,3 +62,12 @@ class TrackingResponse(BaseModel):
     seasons_json: list | None
     last_checked_at: datetime | None
     created_at: datetime
+
+
+class TrackResponse(TrackingResponse):
+    """Returned by POST /track — extends TrackingResponse with queued_count."""
+    queued_count: int = 0
+
+
+class PatchEpisodeRequest(BaseModel):
+    monitored: bool

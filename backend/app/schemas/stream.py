@@ -52,6 +52,7 @@ class EpisodeResponse(BaseModel):
     container_extension: str | None
     added: str | None
     duration: str | None
+    monitored: bool
 
 
 class SeasonResponse(BaseModel):
