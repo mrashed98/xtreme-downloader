@@ -63,6 +63,31 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.warning(f"Could not reset stale sync statuses: {e}")
 
+    # Reset downloads stuck in "queued" or "downloading" from a previous crashed run.
+    # Background tasks are ephemeral — they don't survive pod restarts.
+    try:
+        from sqlalchemy import update as sa_update
+        from app.models.download import Download, DownloadStatus
+        async with AsyncSessionLocal() as db:
+            result = await db.execute(
+                sa_update(Download)
+                .where(Download.status.in_([DownloadStatus.queued, DownloadStatus.downloading]))
+                .values(
+                    status=DownloadStatus.failed,
+                    error_message="Reset on startup — server was restarted while download was in progress",
+                )
+                .returning(Download.id)
+            )
+            reset_ids = [row[0] for row in result.fetchall()]
+            await db.commit()
+            if reset_ids:
+                logger.warning(
+                    f"Reset {len(reset_ids)} download(s) stuck in queued/downloading state "
+                    f"(ids: {reset_ids}) — likely left over from a previous crash."
+                )
+    except Exception as e:
+        logger.warning(f"Could not reset stale download statuses: {e}")
+
     start_scheduler()
     yield
     # Shutdown

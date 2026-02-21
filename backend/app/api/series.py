@@ -371,6 +371,9 @@ async def _run_download(download_id: int, url: str, file_path: str):
     from app.models.download import Download, DownloadStatus
     from sqlalchemy import select
 
+    logger.info(f"[Series #{download_id}] Background task started → {file_path}")
+    logger.info(f"[Series #{download_id}] URL: {url}")
+
     async def updater(did, **kwargs):
         async with AsyncSessionLocal() as session:
             result = await session.execute(select(Download).where(Download.id == did))
@@ -385,8 +388,10 @@ async def _run_download(download_id: int, url: str, file_path: str):
             download_id, url, file_path,
             db_updater=updater,
         )
+        logger.info(f"[Series #{download_id}] Download completed successfully")
     except Exception as e:
-        logger.error(f"Series download {download_id} failed: {e}")
+        logger.error(f"[Series #{download_id}] Download failed: {e}", exc_info=True)
         await updater(download_id, status=DownloadStatus.failed, error_message=str(e))
     finally:
         dl_service.unregister_task(download_id)
+        logger.info(f"[Series #{download_id}] Background task finished")

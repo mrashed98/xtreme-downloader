@@ -277,7 +277,13 @@ export function Downloads() {
   const { data: downloads = [], refetch } = useQuery({
     queryKey: ["downloads", tab],
     queryFn: () => downloadsApi.list({ status: tab === "all" ? undefined : tab }),
-    refetchInterval: tab === "downloading" ? 3000 : 10000,
+    refetchInterval: (query) => {
+      const data = query.state.data ?? [];
+      const hasActive = data.some(
+        (d) => d.status === "downloading" || d.status === "queued"
+      );
+      return hasActive ? 2000 : 10000;
+    },
   });
 
   // WebSocket for real-time progress
@@ -289,23 +295,36 @@ export function Downloads() {
     ws.onmessage = (event) => {
       try {
         const data = JSON.parse(event.data);
-        if (data.download_id && data.type !== "heartbeat") {
-          qc.setQueryData<DownloadType[]>(["downloads", tab], (old) => {
-            if (!old) return old;
-            return old.map((dl) =>
-              dl.id === data.download_id
-                ? {
-                    ...dl,
-                    progress_pct: data.progress ?? dl.progress_pct,
-                    speed_bps: data.speed_bps ?? dl.speed_bps,
-                    downloaded_bytes: data.downloaded_bytes ?? dl.downloaded_bytes,
-                    total_bytes: data.total_bytes ?? dl.total_bytes,
-                    status: data.status ?? dl.status,
-                  }
-                : dl
-            );
-          });
+        if (!data.download_id || data.type === "heartbeat") return;
+
+        // If status changed to a terminal state, do a full refetch to get fresh data
+        if (data.status === "completed" || data.status === "failed" || data.status === "cancelled") {
+          qc.invalidateQueries({ queryKey: ["downloads"] });
+          return;
         }
+
+        // Otherwise patch in-place for smooth progress updates
+        qc.setQueryData<DownloadType[]>(["downloads", tab], (old) => {
+          if (!old) return old;
+          const found = old.some((dl) => dl.id === data.download_id);
+          if (!found) {
+            // Download not in current list (e.g. added while on another tab) — trigger refetch
+            qc.invalidateQueries({ queryKey: ["downloads", tab] });
+            return old;
+          }
+          return old.map((dl) =>
+            dl.id === data.download_id
+              ? {
+                  ...dl,
+                  progress_pct: data.progress ?? dl.progress_pct,
+                  speed_bps: data.speed_bps ?? dl.speed_bps,
+                  downloaded_bytes: data.downloaded_bytes ?? dl.downloaded_bytes,
+                  total_bytes: data.total_bytes ?? dl.total_bytes,
+                  status: data.status ?? dl.status,
+                }
+              : dl
+          );
+        });
       } catch {}
     };
 
