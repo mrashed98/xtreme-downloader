@@ -92,10 +92,10 @@ async def get_series_actors(playlist_id: int, db: AsyncSession = Depends(get_db)
         text("""
             SELECT DISTINCT TRIM(actor) AS actor
             FROM series,
-                 unnest(string_to_array(cast, ',')) AS actor
+                 unnest(string_to_array("cast", ',')) AS actor
             WHERE playlist_id = :pid
-              AND cast IS NOT NULL
-              AND cast != ''
+              AND "cast" IS NOT NULL
+              AND "cast" != ''
             ORDER BY 1
         """),
         {"pid": playlist_id},
