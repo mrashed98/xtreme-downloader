@@ -18,6 +18,7 @@ function VodInfoModal({
   onClose: () => void;
 }) {
   const { openPlayer } = useAppStore();
+  const qc = useQueryClient();
   const [language, setLanguage] = useState("English");
   const [downloading, setDownloading] = useState(false);
   const [downloaded, setDownloaded] = useState(false);
@@ -43,6 +44,7 @@ function VodInfoModal({
     try {
       await vodApi.download(playlistId, stream.stream_id, language);
       setDownloaded(true);
+      qc.invalidateQueries({ queryKey: ["downloads"] });
     } finally {
       setDownloading(false);
     }

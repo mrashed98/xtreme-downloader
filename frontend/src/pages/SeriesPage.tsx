@@ -63,6 +63,7 @@ function SeriesDetailModal({
         language: downloadLanguage,
         episode_ids: [ep.episode_id],
       });
+      qc.invalidateQueries({ queryKey: ["downloads"] });
     } finally {
       setDownloadingEps((prev) => {
         const next = new Set(prev);
@@ -77,6 +78,7 @@ function SeriesDetailModal({
       language: downloadLanguage,
       season_num: seasonNum,
     });
+    qc.invalidateQueries({ queryKey: ["downloads"] });
   };
 
   const handlePlayEpisode = async (ep: Episode, season: Season) => {
@@ -303,6 +305,7 @@ function SeriesDetailModal({
         <TrackingDialog
           series={series}
           seasons={seasons}
+          tracking={tracking}
           onClose={() => setShowTracking(false)}
           onTracked={() => qc.invalidateQueries({ queryKey: ["series-tracking"] })}
         />

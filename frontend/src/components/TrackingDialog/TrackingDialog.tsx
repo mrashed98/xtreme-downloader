@@ -1,21 +1,22 @@
 import { useState } from "react";
 import { X, BookmarkPlus } from "lucide-react";
-import type { Series, Season } from "../../api/client";
+import type { Series, Season, Tracking } from "../../api/client";
 import { seriesApi } from "../../api/client";
 
 interface TrackingDialogProps {
   series: Series;
   seasons: Season[];
+  tracking?: Tracking | null;
   onClose: () => void;
   onTracked: () => void;
 }
 
 const LANGUAGES = ["Arabic", "English", "Turkish", "French", "Spanish", "German", "Italian", "Portuguese", "Other"];
 
-export function TrackingDialog({ series, seasons, onClose, onTracked }: TrackingDialogProps) {
-  const [language, setLanguage] = useState("English");
-  const [trackAll, setTrackAll] = useState(true);
-  const [selectedSeasons, setSelectedSeasons] = useState<number[]>([]);
+export function TrackingDialog({ series, seasons, tracking, onClose, onTracked }: TrackingDialogProps) {
+  const [language, setLanguage] = useState(tracking?.language ?? "English");
+  const [trackAll, setTrackAll] = useState(tracking?.track_all_seasons ?? true);
+  const [selectedSeasons, setSelectedSeasons] = useState<number[]>(tracking?.seasons_json ?? []);
   const [loading, setLoading] = useState(false);
 
   const toggleSeason = (num: number) => {
