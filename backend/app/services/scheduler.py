@@ -57,170 +57,187 @@ async def _sync_playlist(db, playlist):
         await db.rollback()
 
     client = XtreamClient(playlist.base_url, playlist.username, playlist.password)
+    failed: list[str] = []
+
     try:
-        # ── Live categories ──────────────────────────────────────────────────
-        live_cats = await client.get_live_categories()
-        logger.info(f"[{playlist.name}] Upserting {len(live_cats)} live categories")
-        for cat in live_cats:
-            stmt = pg_insert(Category).values(
-                playlist_id=playlist.id,
-                type=CategoryType.live,
-                category_id=str(cat.get("category_id", "")),
-                name=cat.get("category_name", ""),
-            ).on_conflict_do_update(
-                constraint="uq_categories_playlist_type_cat",
-                set_={"name": cat.get("category_name", "")},
-            )
-            await db.execute(stmt)
+        # ── Live (categories + streams) ──────────────────────────────────────
+        try:
+            live_cats = await client.get_live_categories()
+            logger.info(f"[{playlist.name}] Upserting {len(live_cats)} live categories")
+            for cat in live_cats:
+                await db.execute(pg_insert(Category).values(
+                    playlist_id=playlist.id,
+                    type=CategoryType.live,
+                    category_id=str(cat.get("category_id", "")),
+                    name=cat.get("category_name", ""),
+                ).on_conflict_do_update(
+                    constraint="uq_categories_playlist_type_cat",
+                    set_={"name": cat.get("category_name", "")},
+                ))
 
-        # ── Live streams ─────────────────────────────────────────────────────
-        live_streams = await client.get_live_streams()
-        logger.info(f"[{playlist.name}] Upserting {len(live_streams)} live streams")
-        for s in live_streams:
-            stmt = pg_insert(LiveStream).values(
-                playlist_id=playlist.id,
-                stream_id=str(s.get("stream_id", "")),
-                name=s.get("name", ""),
-                icon=s.get("stream_icon"),
-                category_id=str(s.get("category_id", "")) if s.get("category_id") else None,
-                epg_channel_id=s.get("epg_channel_id"),
-                stream_type=s.get("stream_type"),
-            ).on_conflict_do_update(
-                constraint="uq_live_streams_playlist_stream",
-                set_={
-                    "name": s.get("name", ""),
-                    "icon": s.get("stream_icon"),
-                    "category_id": str(s.get("category_id", "")) if s.get("category_id") else None,
-                    "epg_channel_id": s.get("epg_channel_id"),
-                },
-            )
-            await db.execute(stmt)
+            live_streams = await client.get_live_streams()
+            logger.info(f"[{playlist.name}] Upserting {len(live_streams)} live streams")
+            for s in live_streams:
+                await db.execute(pg_insert(LiveStream).values(
+                    playlist_id=playlist.id,
+                    stream_id=str(s.get("stream_id", "")),
+                    name=s.get("name", ""),
+                    icon=s.get("stream_icon"),
+                    category_id=str(s.get("category_id", "")) if s.get("category_id") else None,
+                    epg_channel_id=s.get("epg_channel_id"),
+                    stream_type=s.get("stream_type"),
+                ).on_conflict_do_update(
+                    constraint="uq_live_streams_playlist_stream",
+                    set_={
+                        "name": s.get("name", ""),
+                        "icon": s.get("stream_icon"),
+                        "category_id": str(s.get("category_id", "")) if s.get("category_id") else None,
+                        "epg_channel_id": s.get("epg_channel_id"),
+                    },
+                ))
 
-        # ── VOD categories ───────────────────────────────────────────────────
-        vod_cats = await client.get_vod_categories()
-        logger.info(f"[{playlist.name}] Upserting {len(vod_cats)} VOD categories")
-        for cat in vod_cats:
-            stmt = pg_insert(Category).values(
-                playlist_id=playlist.id,
-                type=CategoryType.vod,
-                category_id=str(cat.get("category_id", "")),
-                name=cat.get("category_name", ""),
-            ).on_conflict_do_update(
-                constraint="uq_categories_playlist_type_cat",
-                set_={"name": cat.get("category_name", "")},
-            )
-            await db.execute(stmt)
+            await db.commit()
+            logger.info(f"[{playlist.name}] Live sync complete")
+        except Exception as e:
+            await db.rollback()
+            logger.error(f"[{playlist.name}] Live sync failed: {e}")
+            failed.append("live")
 
-        # ── VOD streams ──────────────────────────────────────────────────────
-        vod_streams = await client.get_vod_streams()
-        logger.info(f"[{playlist.name}] Upserting {len(vod_streams)} VOD streams")
-        for s in vod_streams:
-            rating = _safe_float(s.get("rating"))
-            stmt = pg_insert(VodStream).values(
-                playlist_id=playlist.id,
-                stream_id=str(s.get("stream_id", "")),
-                name=s.get("name", ""),
-                icon=s.get("stream_icon"),
-                category_id=str(s.get("category_id", "")) if s.get("category_id") else None,
-                added=str(s.get("added", "")) if s.get("added") else None,
-                container_extension=s.get("container_extension"),
-                imdb_id=s.get("stream_id") if s.get("direct_source") else None,
-                genre=s.get("genre"),
-                cast=s.get("cast"),
-                director=s.get("director"),
-                rating=rating,
-                plot=s.get("plot"),
-                duration=s.get("duration"),
-                language=s.get("language"),
-            ).on_conflict_do_update(
-                constraint="uq_vod_streams_playlist_stream",
-                set_={
-                    "name": s.get("name", ""),
-                    "icon": s.get("stream_icon"),
-                    "category_id": str(s.get("category_id", "")) if s.get("category_id") else None,
-                    "genre": s.get("genre"),
-                    "cast": s.get("cast"),
-                    "director": s.get("director"),
-                    "rating": rating,
-                    "plot": s.get("plot"),
-                    "duration": s.get("duration"),
-                    "language": s.get("language"),
-                    "container_extension": s.get("container_extension"),
-                },
-            )
-            await db.execute(stmt)
+        # ── VOD (categories + streams) ───────────────────────────────────────
+        try:
+            vod_cats = await client.get_vod_categories()
+            logger.info(f"[{playlist.name}] Upserting {len(vod_cats)} VOD categories")
+            for cat in vod_cats:
+                await db.execute(pg_insert(Category).values(
+                    playlist_id=playlist.id,
+                    type=CategoryType.vod,
+                    category_id=str(cat.get("category_id", "")),
+                    name=cat.get("category_name", ""),
+                ).on_conflict_do_update(
+                    constraint="uq_categories_playlist_type_cat",
+                    set_={"name": cat.get("category_name", "")},
+                ))
 
-        # ── Series categories ────────────────────────────────────────────────
-        series_cats = await client.get_series_categories()
-        for cat in series_cats:
-            stmt = pg_insert(Category).values(
-                playlist_id=playlist.id,
-                type=CategoryType.series,
-                category_id=str(cat.get("category_id", "")),
-                name=cat.get("category_name", ""),
-            ).on_conflict_do_update(
-                constraint="uq_categories_playlist_type_cat",
-                set_={"name": cat.get("category_name", "")},
-            )
-            await db.execute(stmt)
+            vod_streams = await client.get_vod_streams()
+            logger.info(f"[{playlist.name}] Upserting {len(vod_streams)} VOD streams")
+            for s in vod_streams:
+                rating = _safe_float(s.get("rating"))
+                await db.execute(pg_insert(VodStream).values(
+                    playlist_id=playlist.id,
+                    stream_id=str(s.get("stream_id", "")),
+                    name=s.get("name", ""),
+                    icon=s.get("stream_icon"),
+                    category_id=str(s.get("category_id", "")) if s.get("category_id") else None,
+                    added=str(s.get("added", "")) if s.get("added") else None,
+                    container_extension=s.get("container_extension"),
+                    imdb_id=s.get("stream_id") if s.get("direct_source") else None,
+                    genre=s.get("genre"),
+                    cast=s.get("cast"),
+                    director=s.get("director"),
+                    rating=rating,
+                    plot=s.get("plot"),
+                    duration=s.get("duration"),
+                    language=s.get("language"),
+                ).on_conflict_do_update(
+                    constraint="uq_vod_streams_playlist_stream",
+                    set_={
+                        "name": s.get("name", ""),
+                        "icon": s.get("stream_icon"),
+                        "category_id": str(s.get("category_id", "")) if s.get("category_id") else None,
+                        "genre": s.get("genre"),
+                        "cast": s.get("cast"),
+                        "director": s.get("director"),
+                        "rating": rating,
+                        "plot": s.get("plot"),
+                        "duration": s.get("duration"),
+                        "language": s.get("language"),
+                        "container_extension": s.get("container_extension"),
+                    },
+                ))
 
-        # ── Series list (metadata only — episodes fetched on-demand) ─────────
-        series_list = await client.get_series()
-        for s in series_list:
-            rating = _safe_float(s.get("rating") or s.get("rating_5based"))
-            trailer = s.get("youtube_trailer") or None
-            release_date = s.get("releaseDate") or s.get("release_date") or None
-            stmt = pg_insert(Series).values(
-                playlist_id=playlist.id,
-                series_id=str(s.get("series_id", "")),
-                name=s.get("name", ""),
-                cover=s.get("cover"),
-                category_id=str(s.get("category_id", "")) if s.get("category_id") else None,
-                cast=s.get("cast"),
-                director=s.get("director"),
-                genre=s.get("genre"),
-                plot=s.get("plot"),
-                rating=rating,
-                language=s.get("language"),
-                youtube_trailer=trailer,
-                release_date=release_date,
-            ).on_conflict_do_update(
-                constraint="uq_series_playlist_series",
-                set_={
-                    "name": s.get("name", ""),
-                    "cover": s.get("cover"),
-                    "category_id": str(s.get("category_id", "")) if s.get("category_id") else None,
-                    "cast": s.get("cast"),
-                    "director": s.get("director"),
-                    "genre": s.get("genre"),
-                    "plot": s.get("plot"),
-                    "rating": rating,
-                    "language": s.get("language"),
-                    "youtube_trailer": trailer,
-                    "release_date": release_date,
-                },
-            )
-            await db.execute(stmt)
+            await db.commit()
+            logger.info(f"[{playlist.name}] VOD sync complete")
+        except Exception as e:
+            await db.rollback()
+            logger.error(f"[{playlist.name}] VOD sync failed: {e}")
+            failed.append("vod")
 
-        await db.execute(
-            update(Playlist)
-            .where(Playlist.id == playlist.id)
-            .values(last_synced_at=datetime.utcnow(), sync_status="idle")
-        )
-        await db.commit()
+        # ── Series (categories + metadata) ───────────────────────────────────
+        try:
+            series_cats = await client.get_series_categories()
+            logger.info(f"[{playlist.name}] Upserting {len(series_cats)} series categories")
+            for cat in series_cats:
+                await db.execute(pg_insert(Category).values(
+                    playlist_id=playlist.id,
+                    type=CategoryType.series,
+                    category_id=str(cat.get("category_id", "")),
+                    name=cat.get("category_name", ""),
+                ).on_conflict_do_update(
+                    constraint="uq_categories_playlist_type_cat",
+                    set_={"name": cat.get("category_name", "")},
+                ))
 
-    except Exception:
-        await db.rollback()
+            series_list = await client.get_series()
+            logger.info(f"[{playlist.name}] Upserting {len(series_list)} series")
+            for s in series_list:
+                rating = _safe_float(s.get("rating") or s.get("rating_5based"))
+                trailer = s.get("youtube_trailer") or None
+                release_date = s.get("releaseDate") or s.get("release_date") or None
+                await db.execute(pg_insert(Series).values(
+                    playlist_id=playlist.id,
+                    series_id=str(s.get("series_id", "")),
+                    name=s.get("name", ""),
+                    cover=s.get("cover"),
+                    category_id=str(s.get("category_id", "")) if s.get("category_id") else None,
+                    cast=s.get("cast"),
+                    director=s.get("director"),
+                    genre=s.get("genre"),
+                    plot=s.get("plot"),
+                    rating=rating,
+                    language=s.get("language"),
+                    youtube_trailer=trailer,
+                    release_date=release_date,
+                ).on_conflict_do_update(
+                    constraint="uq_series_playlist_series",
+                    set_={
+                        "name": s.get("name", ""),
+                        "cover": s.get("cover"),
+                        "category_id": str(s.get("category_id", "")) if s.get("category_id") else None,
+                        "cast": s.get("cast"),
+                        "director": s.get("director"),
+                        "genre": s.get("genre"),
+                        "plot": s.get("plot"),
+                        "rating": rating,
+                        "language": s.get("language"),
+                        "youtube_trailer": trailer,
+                        "release_date": release_date,
+                    },
+                ))
+
+            await db.commit()
+            logger.info(f"[{playlist.name}] Series sync complete")
+        except Exception as e:
+            await db.rollback()
+            logger.error(f"[{playlist.name}] Series sync failed: {e}")
+            failed.append("series")
+
+        # ── Finalize ─────────────────────────────────────────────────────────
+        final_status = "error" if failed else "idle"
+        if failed:
+            logger.warning(f"[{playlist.name}] Sync finished with errors in: {failed}")
+        else:
+            logger.info(f"[{playlist.name}] Sync completed successfully")
         try:
             await db.execute(
                 update(Playlist)
                 .where(Playlist.id == playlist.id)
-                .values(sync_status="error")
+                .values(last_synced_at=datetime.utcnow(), sync_status=final_status)
             )
             await db.commit()
-        except Exception:
-            pass
-        raise
+        except Exception as e:
+            logger.error(f"[{playlist.name}] Failed to update final sync status: {e}")
+            await db.rollback()
+
     finally:
         await client.close()
 
