@@ -19,13 +19,17 @@ _active_downloads: dict[int, asyncio.Task] = {}
 _cancel_flags: dict[int, bool] = {}
 _pause_flags: dict[int, bool] = {}
 _slot_active: set[int] = set()  # downloads currently holding a semaphore slot
+# Each download captures the semaphore object it acquired so that a later
+# apply_settings() call (which replaces _download_semaphore) cannot cause it
+# to release to the wrong object and corrupt the new semaphore's count.
+_slot_semaphore: dict[int, asyncio.Semaphore] = {}
 _ws_manager: "WSManager | None" = None
 
 _runtime = {
     "max_concurrent_downloads": 1,
-    "download_chunks": 1,
+    "download_chunks": 16,
     "speed_limit_bps": 0,
-    "max_retries": 5,
+    "max_retries": 6,
 }
 
 
@@ -52,27 +56,16 @@ def apply_settings(
     _runtime["speed_limit_bps"] = speed_limit_bps
     _runtime["max_retries"] = max_retries
 
-    if _download_semaphore is None:
-        _download_semaphore = asyncio.Semaphore(max_concurrent)
-        logger.info(f"Semaphore initialized: max_concurrent={max_concurrent}")
-    elif max_concurrent != old_max:
-        # Adjust semaphore capacity without replacing the object.
-        # Replacing would orphan any tasks currently blocked on acquire().
-        diff = max_concurrent - old_max
-        if diff > 0:
-            for _ in range(diff):
-                _download_semaphore.release()
-            logger.info(
-                f"Semaphore capacity increased: {old_max} → {max_concurrent} "
-                f"(released {diff} extra slots)"
-            )
-        else:
-            # Shrinking: existing slot holders keep their slots; new requests
-            # just see fewer available. Track the new logical max in _runtime.
-            logger.info(
-                f"Semaphore capacity decreased: {old_max} → {max_concurrent} "
-                f"(existing holders unaffected, active={len(_slot_active)})"
-            )
+    # Always replace the semaphore so the new limit takes effect immediately for
+    # any tasks that haven't acquired a slot yet.  Tasks that already hold a slot
+    # track their own semaphore reference in _slot_semaphore and will release to
+    # the correct (old) object, so the new semaphore's count is never corrupted.
+    _download_semaphore = asyncio.Semaphore(max_concurrent)
+    if old_max != max_concurrent:
+        logger.info(
+            f"Semaphore replaced: max_concurrent {old_max} → {max_concurrent} "
+            f"(active_slots={len(_slot_active)}, queued_waiters will use new semaphore)"
+        )
     else:
         logger.info(f"Settings applied (semaphore unchanged): max_concurrent={max_concurrent}")
 
@@ -190,9 +183,12 @@ async def download_file(
         raise
     logger.info(f"[Download #{download_id}] Tmp dir ready")
 
-    # Acquire a download slot — this is the concurrency gate for ALL download types
+    # Capture the semaphore reference NOW (before any await).  apply_settings()
+    # may replace _download_semaphore later; this task must release the same
+    # object it acquires so the replacement semaphore's count stays correct.
+    sem = _download_semaphore
     slot_wait_start = time.time()
-    if _download_semaphore._value == 0:
+    if sem._value == 0:
         logger.warning(
             f"[Download #{download_id}] Semaphore is fully occupied "
             f"(active_slots={len(_slot_active)}/{_runtime['max_concurrent_downloads']}) — "
@@ -201,11 +197,12 @@ async def download_file(
     else:
         logger.info(
             f"[Download #{download_id}] Waiting for semaphore slot "
-            f"(free={_download_semaphore._value}/{_runtime['max_concurrent_downloads']})..."
+            f"(free={sem._value}/{_runtime['max_concurrent_downloads']})..."
         )
-    await _download_semaphore.acquire()
+    await sem.acquire()
     slot_wait_elapsed = time.time() - slot_wait_start
     _slot_active.add(download_id)
+    _slot_semaphore[download_id] = sem
     logger.info(
         f"[Download #{download_id}] Slot acquired after {slot_wait_elapsed:.1f}s wait "
         f"(active_slots={len(_slot_active)}/{_runtime['max_concurrent_downloads']})"
@@ -246,10 +243,12 @@ async def download_file(
             raise IncompleteDownloadError("Download failed after retries")
 
     finally:
-        # Release semaphore slot if we still hold it (not already released by pause)
+        # Release the semaphore slot if we still hold it (not already released by pause).
+        # Use _slot_semaphore so we release the exact object we acquired.
         if download_id in _slot_active:
             _slot_active.discard(download_id)
-            _download_semaphore.release()
+            held = _slot_semaphore.pop(download_id, _download_semaphore)
+            held.release()
 
 
 async def _single_stream_download(
@@ -356,10 +355,12 @@ async def _single_stream_download(
 
 def pause_download(download_id: int):
     _pause_flags[download_id] = True
-    # Release the semaphore slot while paused so another queued download can start
+    # Release the semaphore slot while paused so another queued download can start.
+    # Release to the same semaphore object that was acquired (not the current global).
     if download_id in _slot_active:
         _slot_active.discard(download_id)
-        _download_semaphore.release()
+        held = _slot_semaphore.pop(download_id, _download_semaphore)
+        held.release()
         logger.info(f"[Download #{download_id}] Slot released (paused)")
 
 
@@ -367,13 +368,17 @@ async def _do_resume(download_id: int):
     """Re-acquire a semaphore slot, then clear the pause flag to wake the download."""
     if _cancel_flags.get(download_id):
         return
+    # Use the current semaphore (user may have changed settings since the download
+    # was paused — use whatever limit is now active).
+    sem = _download_semaphore
     logger.info(f"[Download #{download_id}] Waiting to re-acquire slot after resume...")
-    await _download_semaphore.acquire()
+    await sem.acquire()
     if _cancel_flags.get(download_id):
         # Cancelled while waiting — give the slot back immediately
-        _download_semaphore.release()
+        sem.release()
         return
     _slot_active.add(download_id)
+    _slot_semaphore[download_id] = sem
     logger.info(f"[Download #{download_id}] Slot re-acquired, clearing pause flag")
     _pause_flags[download_id] = False
 
@@ -399,3 +404,4 @@ def unregister_task(download_id: int):
     _cancel_flags.pop(download_id, None)
     _pause_flags.pop(download_id, None)
     _slot_active.discard(download_id)
+    _slot_semaphore.pop(download_id, None)
