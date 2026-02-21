@@ -46,11 +46,35 @@ def apply_settings(
     max_retries: int,
 ):
     global _download_semaphore
+    old_max = _runtime["max_concurrent_downloads"]
     _runtime["max_concurrent_downloads"] = max_concurrent
     _runtime["download_chunks"] = download_chunks
     _runtime["speed_limit_bps"] = speed_limit_bps
     _runtime["max_retries"] = max_retries
-    _download_semaphore = asyncio.Semaphore(max_concurrent)
+
+    if _download_semaphore is None:
+        _download_semaphore = asyncio.Semaphore(max_concurrent)
+        logger.info(f"Semaphore initialized: max_concurrent={max_concurrent}")
+    elif max_concurrent != old_max:
+        # Adjust semaphore capacity without replacing the object.
+        # Replacing would orphan any tasks currently blocked on acquire().
+        diff = max_concurrent - old_max
+        if diff > 0:
+            for _ in range(diff):
+                _download_semaphore.release()
+            logger.info(
+                f"Semaphore capacity increased: {old_max} → {max_concurrent} "
+                f"(released {diff} extra slots)"
+            )
+        else:
+            # Shrinking: existing slot holders keep their slots; new requests
+            # just see fewer available. Track the new logical max in _runtime.
+            logger.info(
+                f"Semaphore capacity decreased: {old_max} → {max_concurrent} "
+                f"(existing holders unaffected, active={len(_slot_active)})"
+            )
+    else:
+        logger.info(f"Settings applied (semaphore unchanged): max_concurrent={max_concurrent}")
 
 
 def get_download_settings() -> dict:
@@ -67,14 +91,15 @@ async def _broadcast(download_id: int, data: dict):
         await _ws_manager.broadcast({"download_id": download_id, **data})
 
 
-async def _check_range_support(session: aiohttp.ClientSession, url: str) -> tuple[bool, int]:
+async def _check_range_support(session: aiohttp.ClientSession, url: str, download_id: int) -> tuple[bool, int]:
     """Check if server supports byte ranges. Returns (supports_range, content_length)."""
     try:
         async with session.head(url, allow_redirects=True, timeout=aiohttp.ClientTimeout(total=10)) as resp:
             content_length = int(resp.headers.get("Content-Length", 0))
             accept_ranges = resp.headers.get("Accept-Ranges", "none").lower()
             return accept_ranges != "none" and content_length > 0, content_length
-    except Exception:
+    except Exception as e:
+        logger.warning(f"[Download #{download_id}] HEAD request failed (no range support): {e}")
         return False, 0
 
 
@@ -137,13 +162,20 @@ async def download_file(
     """Main download function. Returns True on success."""
     global _download_semaphore
     if _download_semaphore is None:
+        logger.warning(
+            f"[Download #{download_id}] Semaphore was None — initializing fallback "
+            f"(max_concurrent={_runtime['max_concurrent_downloads']}). "
+            "This means init_downloader() was not called before the first download."
+        )
         _download_semaphore = asyncio.Semaphore(_runtime["max_concurrent_downloads"])
 
     num_chunks = 1
 
     logger.info(
-        f"[Download #{download_id}] download_file called — chunks={num_chunks}, "
-        f"semaphore_value={_download_semaphore._value}, output={output_path}"
+        f"[Download #{download_id}] download_file called — "
+        f"semaphore_value={_download_semaphore._value}, "
+        f"active_slots={len(_slot_active)}/{_runtime['max_concurrent_downloads']}, "
+        f"output={output_path}"
     )
 
     _cancel_flags[download_id] = False
@@ -151,23 +183,39 @@ async def download_file(
 
     tmp_dir = f"{output_path}.parts"
     logger.info(f"[Download #{download_id}] Creating tmp dir: {tmp_dir}")
-    await asyncio.to_thread(os.makedirs, tmp_dir, exist_ok=True)
+    try:
+        await asyncio.to_thread(os.makedirs, tmp_dir, exist_ok=True)
+    except Exception as e:
+        logger.error(f"[Download #{download_id}] Failed to create tmp dir '{tmp_dir}': {e}")
+        raise
     logger.info(f"[Download #{download_id}] Tmp dir ready")
 
     # Acquire a download slot — this is the concurrency gate for ALL download types
-    logger.info(
-        f"[Download #{download_id}] Waiting for semaphore slot "
-        f"(max_concurrent={_runtime['max_concurrent_downloads']})..."
-    )
+    slot_wait_start = time.time()
+    if _download_semaphore._value == 0:
+        logger.warning(
+            f"[Download #{download_id}] Semaphore is fully occupied "
+            f"(active_slots={len(_slot_active)}/{_runtime['max_concurrent_downloads']}) — "
+            "download will wait for a free slot"
+        )
+    else:
+        logger.info(
+            f"[Download #{download_id}] Waiting for semaphore slot "
+            f"(free={_download_semaphore._value}/{_runtime['max_concurrent_downloads']})..."
+        )
     await _download_semaphore.acquire()
+    slot_wait_elapsed = time.time() - slot_wait_start
     _slot_active.add(download_id)
-    logger.info(f"[Download #{download_id}] Slot acquired")
+    logger.info(
+        f"[Download #{download_id}] Slot acquired after {slot_wait_elapsed:.1f}s wait "
+        f"(active_slots={len(_slot_active)}/{_runtime['max_concurrent_downloads']})"
+    )
 
     try:
         connector = aiohttp.TCPConnector(ssl=False, limit=2)
         async with aiohttp.ClientSession(connector=connector) as session:
-            logger.info(f"[Download #{download_id}] Checking range support...")
-            supports_range, total_bytes = await _check_range_support(session, url)
+            logger.info(f"[Download #{download_id}] Checking range support for: {url[:80]}...")
+            supports_range, total_bytes = await _check_range_support(session, url, download_id)
             logger.info(
                 f"[Download #{download_id}] Range support: {supports_range}, "
                 f"size: {total_bytes} bytes ({total_bytes / 1024 / 1024:.1f} MB)"
@@ -302,7 +350,7 @@ async def _single_stream_download(
         await _broadcast(download_id, {"status": "completed", "progress": 100.0})
         return True
     except Exception as e:
-        logger.error(f"Single stream download failed: {e}")
+        logger.error(f"[Download #{download_id}] Single stream download failed: {e}", exc_info=True)
         raise
 
 

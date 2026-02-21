@@ -160,9 +160,26 @@ async def download_vod(
     client = XtreamClient(playlist.base_url, playlist.username, playlist.password)
     url = client.build_vod_url(stream_id, ext)
 
+    logger.info(
+        f"[VOD #{download.id}] Scheduling download task — "
+        f"active_tasks={len(dl_service._active_downloads)}"
+    )
     task = asyncio.create_task(_run_download(download.id, url, file_path))
+    task.add_done_callback(lambda t: _log_task_result(t, download.id, "VOD"))
     dl_service.register_task(download.id, task)
+    logger.info(f"[VOD #{download.id}] Task created and registered")
     return download
+
+
+def _log_task_result(task: asyncio.Task, download_id: int, label: str):
+    """Done callback: surface any exception that slipped past the try/except."""
+    if task.cancelled():
+        logger.warning(f"[{label} #{download_id}] Task was cancelled unexpectedly")
+    elif task.exception() is not None:
+        logger.error(
+            f"[{label} #{download_id}] Task raised unhandled exception",
+            exc_info=task.exception(),
+        )
 
 
 async def _run_download(download_id: int, url: str, file_path: str):
@@ -173,13 +190,19 @@ async def _run_download(download_id: int, url: str, file_path: str):
     logger.info(f"[VOD #{download_id}] URL: {url}")
 
     async def updater(did, **kwargs):
+        logger.debug(f"[VOD #{did}] DB update: {kwargs}")
         async with AsyncSessionLocal() as session:
             result = await session.execute(select(Download).where(Download.id == did))
             dl = result.scalar_one_or_none()
-            if dl:
-                for k, v in kwargs.items():
-                    setattr(dl, k, v)
+            if dl is None:
+                logger.error(f"[VOD #{did}] Download record not found in DB — cannot apply update {kwargs}")
+                return
+            for k, v in kwargs.items():
+                setattr(dl, k, v)
+            try:
                 await session.commit()
+            except Exception as e:
+                logger.error(f"[VOD #{did}] Failed to commit DB update {kwargs}: {e}", exc_info=True)
 
     try:
         await dl_service.download_file(

@@ -32,11 +32,20 @@ async def lifespan(app: FastAPI):
             result = await db.execute(select(AppSetting))
             rows = {r.key: r.value for r in result.scalars().all()}
             if rows:
-                dl_service.apply_settings(
+                effective = dict(
                     max_concurrent=int(rows.get("max_concurrent_downloads", settings.max_concurrent_downloads)),
                     download_chunks=int(rows.get("download_chunks", settings.download_chunks)),
                     speed_limit_bps=int(rows.get("speed_limit_bps", 0)),
                     max_retries=int(rows.get("max_retries", settings.max_retries)),
+                )
+                logger.info(f"Applying persisted settings from DB: {effective}")
+                dl_service.apply_settings(**effective)
+            else:
+                logger.info(
+                    f"No persisted settings in DB — using defaults: "
+                    f"max_concurrent={settings.max_concurrent_downloads}, "
+                    f"download_chunks={settings.download_chunks}, "
+                    f"max_retries={settings.max_retries}"
                 )
     except Exception as e:
         logger.warning(f"Could not load settings from DB (first boot?): {e}")

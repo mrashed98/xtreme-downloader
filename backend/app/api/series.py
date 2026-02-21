@@ -81,8 +81,14 @@ async def _queue_episode_downloads(
         for download, ep_id, ext in queued:
             await db.refresh(download)
             url = client.build_series_url(ep_id, ext)
+            logger.info(
+                f"[Series #{download.id}] Scheduling download task — "
+                f"active_tasks={len(dl_service._active_downloads)}"
+            )
             task = asyncio.create_task(_run_download(download.id, url, download.file_path))
+            task.add_done_callback(lambda t, did=download.id: _log_task_result(t, did, "Series"))
             dl_service.register_task(download.id, task)
+            logger.info(f"[Series #{download.id}] Task created and registered")
 
     return len(queued)
 
@@ -507,10 +513,27 @@ async def download_series(
     for download, ep_id, ext in downloads:
         await db.refresh(download)
         url = client.build_series_url(ep_id, ext)
+        logger.info(
+            f"[Series #{download.id}] Scheduling download task — "
+            f"active_tasks={len(dl_service._active_downloads)}"
+        )
         task = asyncio.create_task(_run_download(download.id, url, download.file_path))
+        task.add_done_callback(lambda t, did=download.id: _log_task_result(t, did, "Series"))
         dl_service.register_task(download.id, task)
+        logger.info(f"[Series #{download.id}] Task created and registered")
 
     return [d for d, _, _ in downloads]
+
+
+def _log_task_result(task: asyncio.Task, download_id: int, label: str):
+    """Done callback: surface any exception that slipped past the try/except."""
+    if task.cancelled():
+        logger.warning(f"[{label} #{download_id}] Task was cancelled unexpectedly")
+    elif task.exception() is not None:
+        logger.error(
+            f"[{label} #{download_id}] Task raised unhandled exception",
+            exc_info=task.exception(),
+        )
 
 
 async def _run_download(download_id: int, url: str, file_path: str):
@@ -521,13 +544,19 @@ async def _run_download(download_id: int, url: str, file_path: str):
     logger.info(f"[Series #{download_id}] URL: {url}")
 
     async def updater(did, **kwargs):
+        logger.debug(f"[Series #{did}] DB update: {kwargs}")
         async with AsyncSessionLocal() as session:
             result = await session.execute(select(Download).where(Download.id == did))
             dl = result.scalar_one_or_none()
-            if dl:
-                for k, v in kwargs.items():
-                    setattr(dl, k, v)
+            if dl is None:
+                logger.error(f"[Series #{did}] Download record not found in DB — cannot apply update {kwargs}")
+                return
+            for k, v in kwargs.items():
+                setattr(dl, k, v)
+            try:
                 await session.commit()
+            except Exception as e:
+                logger.error(f"[Series #{did}] Failed to commit DB update {kwargs}: {e}", exc_info=True)
 
     try:
         await dl_service.download_file(

@@ -161,32 +161,59 @@ async def _trigger_queued_downloads(db: AsyncSession, playlist):
         url = client.build_series_url(download.stream_id, download.file_path.rsplit(".", 1)[-1] if download.file_path else "mkv")
 
         import asyncio
+        logger.info(
+            f"[Tracker #{download.id}] Scheduling orphaned queued download — "
+            f"active_tasks={len(dl_service._active_downloads)}"
+        )
         task = asyncio.create_task(
             _run_download(db, download.id, url, download.file_path or "/tmp/unknown")
         )
+        task.add_done_callback(lambda t, did=download.id: _log_task_result(t, did))
         dl_service.register_task(download.id, task)
+        logger.info(f"[Tracker #{download.id}] Task created and registered")
+
+
+def _log_task_result(task, download_id: int):
+    if task.cancelled():
+        logger.warning(f"[Tracker #{download_id}] Task was cancelled unexpectedly")
+    elif task.exception() is not None:
+        logger.error(
+            f"[Tracker #{download_id}] Task raised unhandled exception",
+            exc_info=task.exception(),
+        )
 
 
 async def _run_download(db: AsyncSession, download_id: int, url: str, file_path: str):
     from app.services import downloader as dl_service
     from app.database import AsyncSessionLocal
 
+    logger.info(f"[Tracker #{download_id}] Background task started → {file_path}")
+    logger.info(f"[Tracker #{download_id}] URL: {url}")
+
     async def updater(did, **kwargs):
+        logger.debug(f"[Tracker #{did}] DB update: {kwargs}")
         async with AsyncSessionLocal() as session:
             result = await session.execute(select(Download).where(Download.id == did))
             dl = result.scalar_one_or_none()
-            if dl:
-                for k, v in kwargs.items():
-                    setattr(dl, k, v)
+            if dl is None:
+                logger.error(f"[Tracker #{did}] Download record not found in DB — cannot apply update {kwargs}")
+                return
+            for k, v in kwargs.items():
+                setattr(dl, k, v)
+            try:
                 await session.commit()
+            except Exception as e:
+                logger.error(f"[Tracker #{did}] Failed to commit DB update {kwargs}: {e}", exc_info=True)
 
     try:
         await dl_service.download_file(download_id, url, file_path, db_updater=updater)
+        logger.info(f"[Tracker #{download_id}] Download completed successfully")
     except Exception as e:
-        logger.error(f"Download {download_id} failed: {e}")
+        logger.error(f"[Tracker #{download_id}] Download failed: {e}", exc_info=True)
         await updater(download_id, status=DownloadStatus.failed, error_message=str(e))
     finally:
         dl_service.unregister_task(download_id)
+        logger.info(f"[Tracker #{download_id}] Background task finished")
 
 
 def _safe_int(val) -> int | None:
