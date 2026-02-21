@@ -2,7 +2,7 @@ import asyncio
 from logging.config import fileConfig
 from sqlalchemy import pool
 from sqlalchemy.engine import Connection
-from sqlalchemy.ext.asyncio import async_engine_from_config
+from sqlalchemy.ext.asyncio import create_async_engine
 from alembic import context
 import sys
 import os
@@ -21,10 +21,9 @@ if config.config_file_name is not None:
 
 target_metadata = Base.metadata
 
-config.set_main_option("sqlalchemy.url", settings.database_url)
-
 
 def run_migrations_offline() -> None:
+    # For offline mode use the URL string from config as-is
     url = config.get_main_option("sqlalchemy.url")
     context.configure(
         url=url,
@@ -43,9 +42,10 @@ def do_run_migrations(connection: Connection) -> None:
 
 
 async def run_async_migrations() -> None:
-    connectable = async_engine_from_config(
-        config.get_section(config.config_ini_section, {}),
-        prefix="sqlalchemy.",
+    # Use URL object directly — bypasses SQLAlchemy's RFC-1738 string rendering
+    # which does not encode '#', breaking passwords that contain it.
+    connectable = create_async_engine(
+        settings.get_async_url(),
         poolclass=pool.NullPool,
     )
     async with connectable.connect() as connection:

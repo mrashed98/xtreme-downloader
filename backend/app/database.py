@@ -5,7 +5,7 @@ from app.config import get_settings
 settings = get_settings()
 
 engine = create_async_engine(
-    settings.database_url,
+    settings.get_async_url(),   # URL object — password never serialised to string
     echo=settings.debug,
     pool_size=10,
     max_overflow=20,

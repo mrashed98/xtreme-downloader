@@ -1,6 +1,5 @@
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from pydantic import model_validator
-from sqlalchemy.engine import URL as SAURL
 from functools import lru_cache
 
 
@@ -12,9 +11,9 @@ class Settings(BaseSettings):
     sync_database_url: str = "postgresql+psycopg2://xtreme:xtreme@localhost:5432/xtreme"
 
     # Individual DB params (injected by K8s ConfigMap + Secret).
-    # When all are present they override the URL fields above, using
-    # SQLAlchemy's URL.create() which percent-encodes special characters
-    # so passwords like "#21Cd01e1@#@" work without breaking the URL parser.
+    # When present, get_async_url() / get_sync_url() return a URL *object*
+    # (not a string) so SQLAlchemy never renders the password through its
+    # limited RFC-1738 quoting which omits '#' and other special chars.
     postgres_host: str | None = None
     postgres_port: int = 5432
     postgres_db: str | None = None
@@ -22,25 +21,38 @@ class Settings(BaseSettings):
     postgres_password: str | None = None
 
     @model_validator(mode="after")
-    def build_urls_from_parts(self) -> "Settings":
+    def validate_db_config(self) -> "Settings":
+        # Nothing to build at validation time — URL objects are returned
+        # on demand by get_async_url() / get_sync_url() below.
+        return self
+
+    def get_async_url(self):
+        """Return a SQLAlchemy URL object (or string for docker-compose)."""
         if self.postgres_host and self.postgres_password:
-            self.database_url = str(SAURL.create(
+            from sqlalchemy.engine import URL
+            return URL.create(
                 drivername="postgresql+asyncpg",
                 username=self.postgres_user,
                 password=self.postgres_password,
                 host=self.postgres_host,
                 port=self.postgres_port,
                 database=self.postgres_db,
-            ))
-            self.sync_database_url = str(SAURL.create(
+            )
+        return self.database_url
+
+    def get_sync_url(self):
+        """Return a SQLAlchemy URL object (or string for docker-compose)."""
+        if self.postgres_host and self.postgres_password:
+            from sqlalchemy.engine import URL
+            return URL.create(
                 drivername="postgresql+psycopg2",
                 username=self.postgres_user,
                 password=self.postgres_password,
                 host=self.postgres_host,
                 port=self.postgres_port,
                 database=self.postgres_db,
-            ))
-        return self
+            )
+        return self.sync_database_url
 
     # Redis
     redis_url: str = "redis://localhost:6379/0"
@@ -56,7 +68,7 @@ class Settings(BaseSettings):
     max_concurrent_downloads: int = 3
     download_chunks: int = 16
 
-    # Scheduler intervals (seconds)
+    # Scheduler intervals
     sync_interval_hours: int = 6
     tracker_interval_hours: int = 1
 
