@@ -305,6 +305,13 @@ async def _single_stream_download(
     """Fallback single-stream download."""
     logger.info(f"[Download #{download_id}] Single-stream download starting")
     await asyncio.to_thread(Path(output_path).parent.mkdir, parents=True, exist_ok=True)
+
+    # Transition status to "downloading" immediately — same as the parallel chunk path.
+    # Without this the status stays "queued" in both the DB and WebSocket until completion.
+    if db_updater:
+        await db_updater(download_id, status="downloading", total_bytes=total_bytes)
+    await _broadcast(download_id, {"status": "downloading", "total_bytes": total_bytes})
+
     tmp_file = os.path.join(tmp_dir, "stream")
     downloaded = 0
     start_time = time.time()
