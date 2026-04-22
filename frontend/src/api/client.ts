@@ -221,6 +221,7 @@ export const downloadsApi = {
     api.get<Download[]>("/downloads", { params }).then((r) => r.data),
   pause: (id: number) => api.post<Download>(`/downloads/${id}/pause`).then((r) => r.data),
   resume: (id: number) => api.post<Download>(`/downloads/${id}/resume`).then((r) => r.data),
+  retry: (id: number) => api.post<Download>(`/downloads/${id}/retry`).then((r) => r.data),
   delete: (id: number, deleteFile = false) =>
     api.delete(`/downloads/${id}`, { params: { delete_file: deleteFile } }),
 };

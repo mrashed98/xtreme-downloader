@@ -5,9 +5,12 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
-from app.models.download import Download, DownloadStatus
+from app.models.download import Download, DownloadStatus, ContentType
+from app.models.playlist import Playlist
 from app.schemas.download import DownloadResponse
 from app.services import downloader as dl_service
+from app.services.download_runner import schedule_download
+from app.services.xtream import XtreamClient
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/downloads", tags=["downloads"])
@@ -70,6 +73,55 @@ async def resume_download(
     dl.status = DownloadStatus.downloading
     await db.commit()
     await db.refresh(dl)
+    return dl
+
+
+@router.post("/{download_id}/retry", response_model=DownloadResponse)
+async def retry_download(download_id: int, db: AsyncSession = Depends(get_db)):
+    result = await db.execute(select(Download).where(Download.id == download_id))
+    dl = result.scalar_one_or_none()
+    if not dl:
+        raise HTTPException(404, "Download not found")
+    if dl.status not in (DownloadStatus.failed, DownloadStatus.cancelled):
+        raise HTTPException(
+            400, f"Only failed or cancelled downloads can be retried (status: '{dl.status}')"
+        )
+    if dl.content_type == ContentType.live:
+        raise HTTPException(400, "Live streams are not downloadable")
+    if not dl.file_path:
+        raise HTTPException(400, "Download has no file_path — cannot retry")
+
+    pl_result = await db.execute(select(Playlist).where(Playlist.id == dl.playlist_id))
+    playlist = pl_result.scalar_one_or_none()
+    if not playlist:
+        raise HTTPException(404, "Playlist not found")
+
+    # Derive container ext from existing file_path (fallback by content type).
+    _, dot_ext = os.path.splitext(dl.file_path)
+    ext = dot_ext.lstrip(".") or ("mkv" if dl.content_type == ContentType.series else "mp4")
+
+    client = XtreamClient(playlist.base_url, playlist.username, playlist.password)
+    if dl.content_type == ContentType.vod:
+        url = client.build_vod_url(dl.stream_id, ext)
+        label = "VOD-retry"
+    else:
+        url = client.build_series_url(dl.stream_id, ext)
+        label = "Series-retry"
+
+    # Purge any stale pause/cancel flags from the prior lifecycle before re-scheduling.
+    dl_service.unregister_task(download_id)
+
+    dl.status = DownloadStatus.queued
+    dl.progress_pct = 0.0
+    dl.downloaded_bytes = 0
+    dl.speed_bps = 0
+    dl.error_message = None
+    dl.completed_at = None
+    await db.commit()
+    await db.refresh(dl)
+
+    logger.info(f"[{label} #{dl.id}] Retry scheduled")
+    schedule_download(dl.id, url, dl.file_path, label)
     return dl
 
 

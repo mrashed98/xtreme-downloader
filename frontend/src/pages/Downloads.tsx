@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
-import { Pause, Play, Trash2, Download, Settings, X } from "lucide-react";
+import { Pause, Play, Trash2, Download, Settings, X, RotateCcw } from "lucide-react";
+import { toast } from "sonner";
 import {
   downloadsApi,
   settingsApi,
@@ -182,14 +183,17 @@ function DownloadRow({
   dl,
   onPause,
   onResume,
+  onRetry,
   onDelete,
 }: {
   dl: DownloadType;
   onPause: (id: number) => void;
   onResume: (id: number) => void;
+  onRetry: (id: number) => void;
   onDelete: (id: number) => void;
 }) {
   const progress = dl.progress_pct;
+  const canRetry = dl.status === "failed" || dl.status === "cancelled";
 
   return (
     <div className="glass-card p-4 space-y-2 animate-slide-up">
@@ -211,6 +215,7 @@ function DownloadRow({
               onClick={() => onPause(dl.id)}
               className="p-1.5 rounded-lg hover:bg-white/10 text-white/50 hover:text-white transition-colors"
               title="Pause"
+              aria-label="Pause download"
             >
               <Pause size={14} />
             </button>
@@ -220,14 +225,26 @@ function DownloadRow({
               onClick={() => onResume(dl.id)}
               className="p-1.5 rounded-lg hover:bg-white/10 text-white/50 hover:text-white transition-colors"
               title="Resume"
+              aria-label="Resume download"
             >
               <Play size={14} />
+            </button>
+          )}
+          {canRetry && (
+            <button
+              onClick={() => onRetry(dl.id)}
+              className="p-1.5 rounded-lg hover:bg-purple-500/20 text-white/50 hover:text-purple-300 transition-colors"
+              title="Retry"
+              aria-label="Retry download"
+            >
+              <RotateCcw size={14} />
             </button>
           )}
           <button
             onClick={() => onDelete(dl.id)}
             className="p-1.5 rounded-lg hover:bg-red-500/20 text-white/40 hover:text-red-400 transition-colors"
             title="Delete"
+            aria-label="Delete download"
           >
             <Trash2 size={14} />
           </button>
@@ -354,10 +371,27 @@ export function Downloads() {
     refetch();
   };
 
-  const handleDelete = async (id: number) => {
-    if (!confirm("Delete this download?")) return;
-    await downloadsApi.delete(id);
-    refetch();
+  const handleRetry = async (id: number) => {
+    try {
+      await downloadsApi.retry(id);
+      toast.success("Download re-queued");
+      qc.invalidateQueries({ queryKey: ["downloads"] });
+    } catch {
+      toast.error("Failed to retry download");
+    }
+  };
+
+  const handleDelete = (id: number) => {
+    toast("Delete this download?", {
+      action: {
+        label: "Delete",
+        onClick: async () => {
+          await downloadsApi.delete(id);
+          refetch();
+        },
+      },
+      cancel: { label: "Cancel", onClick: () => {} },
+    });
   };
 
   return (
@@ -375,6 +409,8 @@ export function Downloads() {
               : "hover:bg-white/10 text-white/40 hover:text-white"
           }`}
           title="Download Settings"
+          aria-label="Toggle download settings"
+          aria-expanded={showSettings}
         >
           <Settings size={18} />
         </button>
@@ -414,6 +450,7 @@ export function Downloads() {
               dl={dl}
               onPause={handlePause}
               onResume={handleResume}
+              onRetry={handleRetry}
               onDelete={handleDelete}
             />
           ))}

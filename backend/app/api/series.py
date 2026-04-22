@@ -1,11 +1,10 @@
 import os
-import asyncio
 import logging
 from fastapi import APIRouter, Depends, HTTPException, Query, BackgroundTasks
 from sqlalchemy import select, and_, delete, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.database import get_db, AsyncSessionLocal
+from app.database import get_db
 from app.models.playlist import Playlist, Category, CategoryType
 from app.models.stream import Series, Season, Episode
 from app.models.download import Download, DownloadStatus, ContentType
@@ -15,6 +14,7 @@ from app.schemas.stream import SeriesResponse, SeriesDetailResponse, SeasonRespo
 from app.schemas.download import SeriesDownloadRequest, SeriesTrackRequest, TrackingResponse, TrackResponse, DownloadResponse, PatchEpisodeRequest
 from app.services.xtream import XtreamClient
 from app.services import downloader as dl_service
+from app.services.download_runner import schedule_download
 from app.config import get_settings
 
 logger = logging.getLogger(__name__)
@@ -85,9 +85,7 @@ async def _queue_episode_downloads(
                 f"[Series #{download.id}] Scheduling download task — "
                 f"active_tasks={len(dl_service._active_downloads)}"
             )
-            task = asyncio.create_task(_run_download(download.id, url, download.file_path))
-            task.add_done_callback(lambda t, did=download.id: _log_task_result(t, did, "Series"))
-            dl_service.register_task(download.id, task)
+            schedule_download(download.id, url, download.file_path, "Series")
             logger.info(f"[Series #{download.id}] Task created and registered")
 
     return len(queued)
@@ -517,56 +515,7 @@ async def download_series(
             f"[Series #{download.id}] Scheduling download task — "
             f"active_tasks={len(dl_service._active_downloads)}"
         )
-        task = asyncio.create_task(_run_download(download.id, url, download.file_path))
-        task.add_done_callback(lambda t, did=download.id: _log_task_result(t, did, "Series"))
-        dl_service.register_task(download.id, task)
+        schedule_download(download.id, url, download.file_path, "Series")
         logger.info(f"[Series #{download.id}] Task created and registered")
 
     return [d for d, _, _ in downloads]
-
-
-def _log_task_result(task: asyncio.Task, download_id: int, label: str):
-    """Done callback: surface any exception that slipped past the try/except."""
-    if task.cancelled():
-        logger.warning(f"[{label} #{download_id}] Task was cancelled unexpectedly")
-    elif task.exception() is not None:
-        logger.error(
-            f"[{label} #{download_id}] Task raised unhandled exception",
-            exc_info=task.exception(),
-        )
-
-
-async def _run_download(download_id: int, url: str, file_path: str):
-    from app.models.download import Download, DownloadStatus
-    from sqlalchemy import select
-
-    logger.info(f"[Series #{download_id}] Background task started → {file_path}")
-    logger.info(f"[Series #{download_id}] URL: {url}")
-
-    async def updater(did, **kwargs):
-        logger.debug(f"[Series #{did}] DB update: {kwargs}")
-        async with AsyncSessionLocal() as session:
-            result = await session.execute(select(Download).where(Download.id == did))
-            dl = result.scalar_one_or_none()
-            if dl is None:
-                logger.error(f"[Series #{did}] Download record not found in DB — cannot apply update {kwargs}")
-                return
-            for k, v in kwargs.items():
-                setattr(dl, k, v)
-            try:
-                await session.commit()
-            except Exception as e:
-                logger.error(f"[Series #{did}] Failed to commit DB update {kwargs}: {e}", exc_info=True)
-
-    try:
-        await dl_service.download_file(
-            download_id, url, file_path,
-            db_updater=updater,
-        )
-        logger.info(f"[Series #{download_id}] Download completed successfully")
-    except Exception as e:
-        logger.error(f"[Series #{download_id}] Download failed: {e}", exc_info=True)
-        await updater(download_id, status=DownloadStatus.failed, error_message=str(e))
-    finally:
-        dl_service.unregister_task(download_id)
-        logger.info(f"[Series #{download_id}] Background task finished")

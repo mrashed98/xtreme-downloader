@@ -1,11 +1,13 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { RefreshCw, ChevronDown, AlertCircle } from "lucide-react";
+import { RefreshCw, ChevronDown, AlertCircle, Menu } from "lucide-react";
 import { useState } from "react";
 import { playlistsApi, type Playlist } from "../../api/client";
 import { useAppStore } from "../../store";
 
 export function Navbar() {
   const { activePlaylistId, setActivePlaylistId, setPlaylists } = useAppStore();
+  const sidebarMobileOpen = useAppStore((s) => s.sidebarMobileOpen);
+  const setSidebarMobileOpen = useAppStore((s) => s.setSidebarMobileOpen);
   const [showDropdown, setShowDropdown] = useState(false);
   const qc = useQueryClient();
 
@@ -38,7 +40,18 @@ export function Navbar() {
   };
 
   return (
-    <header className="glass-card rounded-none border-b border-white/10 px-6 py-3 flex items-center gap-4">
+    <header className="glass-card rounded-none border-b border-white/10 px-4 sm:px-6 py-3 flex items-center gap-3 sm:gap-4">
+      {/* Mobile hamburger */}
+      <button
+        onClick={() => setSidebarMobileOpen(true)}
+        className="lg:hidden p-1.5 rounded-lg text-white/60 hover:text-white hover:bg-white/10 transition-colors flex-shrink-0"
+        aria-label="Open navigation"
+        aria-expanded={sidebarMobileOpen}
+        title="Menu"
+      >
+        <Menu size={20} />
+      </button>
+
       {/* Playlist selector */}
       <div className="relative">
         <button
@@ -106,6 +119,7 @@ export function Navbar() {
           onClick={handleSync}
           disabled={isSyncing}
           title={isSyncing ? "Sync in progress…" : "Sync now"}
+          aria-label={isSyncing ? "Sync in progress" : "Sync now"}
           className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm text-white/70 hover:text-white hover:bg-white/5 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
         >
           <RefreshCw size={14} className={isSyncing ? "animate-spin" : ""} />

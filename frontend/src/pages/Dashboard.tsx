@@ -1,6 +1,8 @@
 import { useQuery } from "@tanstack/react-query";
 import { Film, Tv, Clapperboard, Download, Plus, RefreshCw, Trash2, Edit } from "lucide-react";
 import { useState } from "react";
+import axios from "axios";
+import { toast } from "sonner";
 import { playlistsApi, downloadsApi, type Playlist } from "../api/client";
 import { useAppStore } from "../store";
 import { GlassCard } from "../components/Layout/GlassCard";
@@ -63,8 +65,11 @@ function PlaylistModal({
       }
       onSaved();
       onClose();
-    } catch (err: any) {
-      setError(err?.response?.data?.detail || "Failed to save playlist");
+    } catch (err: unknown) {
+      const detail = axios.isAxiosError(err)
+        ? (err.response?.data as { detail?: string } | undefined)?.detail
+        : undefined;
+      setError(detail || "Failed to save playlist");
     } finally {
       setLoading(false);
     }
@@ -160,10 +165,17 @@ export function Dashboard() {
   const completedCount = downloads.filter((d) => d.status === "completed").length;
   const failedCount = downloads.filter((d) => d.status === "failed").length;
 
-  const handleDelete = async (id: number) => {
-    if (!confirm("Delete this playlist?")) return;
-    await playlistsApi.delete(id);
-    refetch();
+  const handleDelete = (id: number, name: string) => {
+    toast(`Delete playlist "${name}"?`, {
+      action: {
+        label: "Delete",
+        onClick: async () => {
+          await playlistsApi.delete(id);
+          refetch();
+        },
+      },
+      cancel: { label: "Cancel", onClick: () => {} },
+    });
   };
 
   const handleSync = async (id: number) => {
@@ -243,6 +255,7 @@ export function Dashboard() {
                         : "hover:bg-white/10 text-white/40 hover:text-white"
                     }`}
                     title={p.sync_status === "syncing" ? "Syncing..." : "Sync"}
+                    aria-label={`Sync playlist ${p.name}`}
                   >
                     <RefreshCw size={14} className={p.sync_status === "syncing" ? "animate-spin" : ""} />
                   </button>
@@ -250,13 +263,15 @@ export function Dashboard() {
                     onClick={() => { setEditPlaylist(p); setShowModal(true); }}
                     className="p-1.5 rounded-lg hover:bg-white/10 text-white/40 hover:text-white transition-colors"
                     title="Edit"
+                    aria-label={`Edit playlist ${p.name}`}
                   >
                     <Edit size={14} />
                   </button>
                   <button
-                    onClick={() => handleDelete(p.id)}
+                    onClick={() => handleDelete(p.id, p.name)}
                     className="p-1.5 rounded-lg hover:bg-red-500/20 text-white/40 hover:text-red-400 transition-colors"
                     title="Delete"
+                    aria-label={`Delete playlist ${p.name}`}
                   >
                     <Trash2 size={14} />
                   </button>
