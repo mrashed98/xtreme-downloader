@@ -1,6 +1,6 @@
 import { NavLink } from "react-router-dom";
 import { useAppStore } from "../../store";
-import { navItems } from "./navItems";
+import { bottomNavItems } from "./navItems";
 
 export function MobileBottomNav() {
   const activeDownloadCount = useAppStore((s) => s.activeDownloadCount);
@@ -8,7 +8,7 @@ export function MobileBottomNav() {
   return (
     <nav className="mobile-bottom-nav lg:hidden" aria-label="Primary">
       <div className="mobile-bottom-nav__inner">
-        {navItems.map(({ to, icon: Icon, label }) => (
+        {bottomNavItems.map(({ to, icon: Icon, label }) => (
           <NavLink
             key={to}
             to={to}

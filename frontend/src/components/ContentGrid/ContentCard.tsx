@@ -54,10 +54,10 @@ export function ContentCard({
         <div className="absolute inset-0 bg-gradient-to-t from-[rgba(7,11,19,0.94)] via-[rgba(7,11,19,0.12)] to-transparent" />
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(255,255,255,0.16),transparent_42%)] opacity-80" />
 
-        <div className="absolute inset-0 flex items-center justify-center gap-3 bg-[rgba(8,13,22,0.35)] opacity-0 transition-opacity duration-300 group-hover:opacity-100">
+        <div className="hover-reveal absolute inset-0 flex items-center justify-center gap-3 bg-[rgba(8,13,22,0.35)]">
           {onPlay && (
             <button
-              className="rounded-full p-3 shadow-lg btn-accent"
+              className="rounded-full p-3.5 shadow-lg btn-accent"
               onClick={(e) => { e.stopPropagation(); onPlay(); }}
             >
               <Play size={16} fill="white" />
@@ -65,7 +65,7 @@ export function ContentCard({
           )}
           {onDownload && (
             <button
-              className="rounded-full bg-white/20 p-3 text-white transition-colors hover:bg-white/30"
+              className="rounded-full bg-white/20 p-3.5 text-white transition-colors hover:bg-white/30"
               onClick={(e) => { e.stopPropagation(); onDownload(); }}
             >
               <Download size={16} />
@@ -75,10 +75,10 @@ export function ContentCard({
 
         {onFavorite && (
           <button
-            className={`absolute left-3 top-3 z-10 rounded-full p-2 transition-colors ${
+            className={`hover-reveal absolute left-3 top-3 z-10 rounded-full p-2 transition-colors ${
               isFavorited
-                ? "bg-rose-500/80 text-white"
-                : "bg-black/45 text-white/55 opacity-0 group-hover:opacity-100 hover:text-rose-300"
+                ? "!opacity-100 bg-rose-500/80 text-white"
+                : "bg-black/45 text-white/55 hover:text-rose-300"
             }`}
             onClick={(e) => { e.stopPropagation(); onFavorite(); }}
             title={isFavorited ? "Remove from favorites" : "Add to favorites"}

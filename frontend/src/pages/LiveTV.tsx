@@ -88,12 +88,12 @@ export function LiveTV() {
           </div>
         ) : (
           <div className="flex-1 overflow-y-auto">
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-5 2xl:grid-cols-6">
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 sm:gap-3 xl:grid-cols-5 2xl:grid-cols-6">
               {streams.map((stream) => (
                 <button
                   key={stream.stream_id}
                   onClick={() => handlePlay(stream.stream_id, stream.name)}
-                  className="glass-card group flex flex-col items-center gap-3 p-4 text-center transition-all duration-300 hover:-translate-y-1"
+                  className="glass-card group flex flex-col items-center gap-2 p-3 text-center transition-all duration-300 hover:-translate-y-1 sm:gap-3 sm:p-4"
                 >
                   {stream.icon ? (
                     <img

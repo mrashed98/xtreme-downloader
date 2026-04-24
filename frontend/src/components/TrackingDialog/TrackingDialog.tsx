@@ -57,7 +57,7 @@ export function TrackingDialog({ series, seasons, tracking, onClose, onTracked }
             <BookmarkPlus size={18} className="text-purple-400" />
             <h2 className="text-white font-semibold">Track Series</h2>
           </div>
-          <button onClick={onClose} className="text-white/50 hover:text-white">
+          <button onClick={onClose} className="p-2 -mr-2 rounded-xl text-white/50 hover:text-white hover:bg-white/10 transition-colors min-w-[2.75rem] min-h-[2.75rem] flex items-center justify-center">
             <X size={18} />
           </button>
         </div>
@@ -99,12 +99,12 @@ export function TrackingDialog({ series, seasons, tracking, onClose, onTracked }
           </label>
 
           {!trackAll && (
-            <div className="grid grid-cols-4 gap-2 mt-2">
+            <div className="grid grid-cols-3 gap-2 mt-2 sm:grid-cols-4 md:grid-cols-5">
               {seasons.map((s) => (
                 <button
                   key={s.season_num}
                   onClick={() => toggleSeason(s.season_num)}
-                  className={`py-1.5 rounded-lg text-sm font-medium transition-colors ${
+                  className={`py-2.5 rounded-lg text-sm font-medium transition-colors min-h-[2.75rem] ${
                     selectedSeasons.includes(s.season_num)
                       ? "btn-accent"
                       : "bg-white/5 text-white/60 hover:bg-white/10 hover:text-white"

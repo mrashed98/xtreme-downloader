@@ -192,7 +192,7 @@ export function VideoPlayer() {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 backdrop-blur-sm animate-fade-in">
-      <div className="relative mx-4 w-full max-w-5xl">
+      <div className="relative mx-2 w-full max-w-5xl sm:mx-4">
         <div className="mb-2 flex items-center justify-between">
           <div className="flex min-w-0 items-center gap-2">
             {player.queue.length > 1 && (
@@ -206,7 +206,7 @@ export function VideoPlayer() {
             {hasPrev && (
               <button
                 onClick={handlePrev}
-                className="rounded-lg p-2 text-white/60 transition-colors hover:bg-white/10 hover:text-white"
+                className="rounded-lg p-2.5 text-white/60 transition-colors hover:bg-white/10 hover:text-white"
                 title="Previous"
               >
                 <SkipBack size={18} />
@@ -215,7 +215,7 @@ export function VideoPlayer() {
             {hasNext && (
               <button
                 onClick={handleNext}
-                className="rounded-lg p-2 text-white/60 transition-colors hover:bg-white/10 hover:text-white"
+                className="rounded-lg p-2.5 text-white/60 transition-colors hover:bg-white/10 hover:text-white"
                 title="Next episode"
               >
                 <SkipForward size={18} />
@@ -223,7 +223,7 @@ export function VideoPlayer() {
             )}
             <button
               onClick={closePlayer}
-              className="rounded-lg p-2 text-white/70 transition-colors hover:bg-white/10 hover:text-white"
+              className="rounded-lg p-2.5 text-white/70 transition-colors hover:bg-white/10 hover:text-white"
             >
               <X size={20} />
             </button>
@@ -273,7 +273,7 @@ export function VideoPlayer() {
           )}
 
           {showUpNext && nextItem && !playbackError && (
-            <div className="absolute bottom-16 right-4 w-64 animate-slide-up glass-card p-3">
+            <div className="absolute bottom-20 left-4 right-4 animate-slide-up glass-card p-3 sm:left-auto sm:w-64">
               <div className="flex items-start justify-between gap-2">
                 <div className="min-w-0">
                   <p className="mb-0.5 text-xs text-white/50">Up Next in {countdown}s</p>
@@ -309,7 +309,7 @@ export function VideoPlayer() {
                   const store = useAppStore.getState();
                   store.openQueue(store.player.queue, i);
                 }}
-                className={`flex-shrink-0 rounded-lg px-2.5 py-1 text-xs transition-colors ${
+                className={`flex-shrink-0 min-w-[2.25rem] min-h-[2.25rem] rounded-lg px-2.5 py-1 text-xs transition-colors flex items-center justify-center ${
                   i === player.queueIndex
                     ? "btn-accent font-medium"
                     : "bg-white/10 text-white/60 hover:bg-white/15 hover:text-white"

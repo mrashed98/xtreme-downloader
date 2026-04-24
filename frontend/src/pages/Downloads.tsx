@@ -213,40 +213,40 @@ function DownloadRow({
           {dl.status === "downloading" && (
             <button
               onClick={() => onPause(dl.id)}
-              className="p-1.5 rounded-lg hover:bg-white/10 text-white/50 hover:text-white transition-colors"
+              className="p-2 min-w-[2.75rem] min-h-[2.75rem] flex items-center justify-center rounded-lg hover:bg-white/10 text-white/50 hover:text-white transition-colors"
               title="Pause"
               aria-label="Pause download"
             >
-              <Pause size={14} />
+              <Pause size={16} />
             </button>
           )}
           {dl.status === "paused" && (
             <button
               onClick={() => onResume(dl.id)}
-              className="p-1.5 rounded-lg hover:bg-white/10 text-white/50 hover:text-white transition-colors"
+              className="p-2 min-w-[2.75rem] min-h-[2.75rem] flex items-center justify-center rounded-lg hover:bg-white/10 text-white/50 hover:text-white transition-colors"
               title="Resume"
               aria-label="Resume download"
             >
-              <Play size={14} />
+              <Play size={16} />
             </button>
           )}
           {canRetry && (
             <button
               onClick={() => onRetry(dl.id)}
-              className="p-1.5 rounded-lg hover:bg-purple-500/20 text-white/50 hover:text-purple-300 transition-colors"
+              className="p-2 min-w-[2.75rem] min-h-[2.75rem] flex items-center justify-center rounded-lg hover:bg-purple-500/20 text-white/50 hover:text-purple-300 transition-colors"
               title="Retry"
               aria-label="Retry download"
             >
-              <RotateCcw size={14} />
+              <RotateCcw size={16} />
             </button>
           )}
           <button
             onClick={() => onDelete(dl.id)}
-            className="p-1.5 rounded-lg hover:bg-red-500/20 text-white/40 hover:text-red-400 transition-colors"
+            className="p-2 min-w-[2.75rem] min-h-[2.75rem] flex items-center justify-center rounded-lg hover:bg-red-500/20 text-white/40 hover:text-red-400 transition-colors"
             title="Delete"
             aria-label="Delete download"
           >
-            <Trash2 size={14} />
+            <Trash2 size={16} />
           </button>
         </div>
       </div>
@@ -453,7 +453,7 @@ export function Downloads() {
           </div>
         </GlassCard>
       ) : (
-        <div className="max-h-[calc(100vh-22rem)] space-y-3 overflow-y-auto pr-1 lg:max-h-[calc(100vh-20rem)]">
+        <div className="space-y-3 overflow-y-auto pr-1 lg:max-h-[calc(100vh-20rem)]">
           {downloads.map((dl) => (
             <DownloadRow
               key={dl.id}

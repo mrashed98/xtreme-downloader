@@ -113,14 +113,14 @@ export function Sidebar() {
 
       {sidebarMobileOpen && (
         <div
-          className="fixed inset-0 z-40 bg-black/60 backdrop-blur-sm animate-fade-in lg:hidden"
+          className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm animate-fade-in lg:hidden"
           onClick={() => setSidebarMobileOpen(false)}
           aria-hidden="true"
         />
       )}
 
       <aside
-        className={`app-sidebar fixed left-0 top-0 z-50 flex h-full w-[88vw] max-w-sm flex-col py-6 transition-transform duration-300 lg:hidden ${
+        className={`app-sidebar fixed left-0 top-0 z-[60] flex h-full w-[88vw] max-w-sm flex-col py-6 transition-transform duration-300 lg:hidden ${
           sidebarMobileOpen ? "translate-x-0" : "-translate-x-full"
         }`}
         role="dialog"

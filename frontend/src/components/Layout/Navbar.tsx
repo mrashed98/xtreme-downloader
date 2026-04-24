@@ -55,7 +55,7 @@ export function Navbar() {
         </p>
         <div className="relative mt-2">
           <button
-            className="flex max-w-[15rem] items-center gap-2 rounded-2xl border border-white/10 bg-white/[0.045] px-3 py-2 text-left transition-colors hover:bg-white/[0.075]"
+            className="flex max-w-[9rem] items-center gap-2 rounded-2xl border border-white/10 bg-white/[0.045] px-3 py-2 text-left transition-colors hover:bg-white/[0.075] lg:max-w-[15rem]"
             onClick={() => setShowDropdown(!showDropdown)}
           >
             <div className={`h-2 w-2 rounded-full ${isSyncing ? "bg-yellow-400 animate-pulse" : isError ? "bg-red-400" : "bg-green-400"}`} />
@@ -66,7 +66,7 @@ export function Navbar() {
           </button>
 
           {showDropdown && (
-            <div className="absolute left-0 top-full z-50 mt-2 w-64 overflow-hidden rounded-3xl border border-white/10 bg-[rgba(10,18,31,0.96)] shadow-[0_28px_70px_rgba(0,0,0,0.4)]">
+            <div className="absolute left-0 right-0 top-full z-50 mt-2 w-[min(16rem,calc(100vw-2rem))] overflow-hidden rounded-3xl border border-white/10 bg-[rgba(10,18,31,0.96)] shadow-[0_28px_70px_rgba(0,0,0,0.4)] sm:right-auto">
               {playlists.map((p) => (
                 <button
                   key={p.id}
@@ -97,20 +97,34 @@ export function Navbar() {
 
       <div className="flex-1" />
 
-      <div className="hidden items-center gap-2 rounded-2xl border border-white/10 bg-white/[0.045] px-3 py-2 text-xs text-white/55 md:flex">
-        {isSyncing && <span className="animate-pulse text-yellow-300">Syncing now</span>}
-        {isError && (
-          <span className="flex items-center gap-1 text-red-300">
-            <AlertCircle size={12} /> Sync failed
+      {(isSyncing || isError) && (
+        <div className="flex items-center gap-1.5 rounded-2xl border border-white/10 bg-white/[0.045] px-2.5 py-2 text-xs md:px-3">
+          {isSyncing && (
+            <span className="animate-pulse text-yellow-300 md:hidden">Syncing…</span>
+          )}
+          {isError && (
+            <span className="flex items-center gap-1 text-red-300 md:hidden">
+              <AlertCircle size={11} /> Failed
+            </span>
+          )}
+          <span className="hidden items-center gap-2 text-white/55 md:flex">
+            {isSyncing && <span className="animate-pulse text-yellow-300">Syncing now</span>}
+            {isError && (
+              <span className="flex items-center gap-1 text-red-300">
+                <AlertCircle size={12} /> Sync failed
+              </span>
+            )}
           </span>
-        )}
-        {activePlaylist?.last_synced_at && !isSyncing && !isError && (
-          <span>Last sync {new Date(activePlaylist.last_synced_at).toLocaleString()}</span>
-        )}
-        {!activePlaylist?.last_synced_at && !isSyncing && !isError && (
-          <span>Ready to sync playlist</span>
-        )}
-      </div>
+        </div>
+      )}
+      {!isSyncing && !isError && (
+        <div className="hidden items-center gap-2 rounded-2xl border border-white/10 bg-white/[0.045] px-3 py-2 text-xs text-white/55 md:flex">
+          {activePlaylist?.last_synced_at
+            ? <span>Last sync {new Date(activePlaylist.last_synced_at).toLocaleString()}</span>
+            : <span>Ready to sync playlist</span>
+          }
+        </div>
+      )}
 
       {activePlaylistId && (
         <button

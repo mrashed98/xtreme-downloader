@@ -22,3 +22,6 @@ export const navItems: NavItem[] = [
   { to: "/downloads", icon: Download, label: "Downloads" },
   { to: "/settings", icon: SlidersHorizontal, label: "Settings" },
 ];
+
+// Bottom nav omits Settings — accessible via sidebar drawer
+export const bottomNavItems: NavItem[] = navItems.filter((n) => n.to !== "/settings");

@@ -39,33 +39,35 @@ export function CategorySidebar({ categories, selected, onSelect }: CategorySide
         />
       </div>
 
-      <div className="flex gap-2 overflow-x-auto pb-1 lg:block lg:flex-1 lg:space-y-1 lg:overflow-x-hidden lg:overflow-y-auto">
-        <button
-          className={`shrink-0 rounded-full px-3 py-2 text-sm transition-colors lg:w-full lg:rounded-2xl lg:text-left ${
-            selected === null
-              ? "bg-white font-medium text-slate-900"
-              : "border border-white/10 text-white/60 hover:bg-white/5 hover:text-white"
-          }`}
-          onClick={() => onSelect(null)}
-        >
-          All
-        </button>
-        {filtered.map((cat) => (
+      <div className="relative">
+        <div className="flex gap-2 overflow-x-auto pb-1 lg:block lg:flex-1 lg:space-y-1 lg:overflow-x-hidden lg:overflow-y-auto [mask-image:linear-gradient(to_right,black_85%,transparent)] lg:[mask-image:none]">
           <button
-            key={cat.category_id}
-            className={`shrink-0 rounded-full px-3 py-2 text-sm transition-colors lg:w-full lg:rounded-2xl lg:text-left ${
-              selected === cat.category_id
+            className={`shrink-0 min-h-[2.75rem] rounded-full px-3 py-2.5 text-sm transition-colors lg:w-full lg:rounded-2xl lg:text-left ${
+              selected === null
                 ? "bg-white font-medium text-slate-900"
                 : "border border-white/10 text-white/60 hover:bg-white/5 hover:text-white"
             }`}
-            onClick={() => onSelect(cat.category_id)}
+            onClick={() => onSelect(null)}
           >
-            {cat.name}
+            All
           </button>
-        ))}
-        {filtered.length === 0 && search && (
-          <p className="px-3 py-2 text-xs text-white/30">No matches</p>
-        )}
+          {filtered.map((cat) => (
+            <button
+              key={cat.category_id}
+              className={`shrink-0 min-h-[2.75rem] rounded-full px-3 py-2.5 text-sm transition-colors lg:w-full lg:rounded-2xl lg:text-left ${
+                selected === cat.category_id
+                  ? "bg-white font-medium text-slate-900"
+                  : "border border-white/10 text-white/60 hover:bg-white/5 hover:text-white"
+              }`}
+              onClick={() => onSelect(cat.category_id)}
+            >
+              {cat.name}
+            </button>
+          ))}
+          {filtered.length === 0 && search && (
+            <p className="px-3 py-2 text-xs text-white/30">No matches</p>
+          )}
+        </div>
       </div>
     </section>
   );
