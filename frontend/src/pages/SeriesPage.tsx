@@ -486,14 +486,14 @@ export function SeriesPage() {
   }
 
   return (
-    <div className="page-shell lg:grid lg:grid-cols-[260px_minmax(0,1fr)] lg:gap-6">
+    <div className="page-shell flex min-h-0 h-full flex-col lg:grid lg:grid-cols-[260px_minmax(0,1fr)] lg:gap-6">
       <CategorySidebar
         categories={seriesCategories}
         selected={selectedCategory}
         onSelect={(id) => { setSelectedCategory(id); setPage(0); }}
       />
 
-      <div className="mt-5 flex min-w-0 flex-col lg:mt-0">
+      <div className="mt-5 flex min-w-0 min-h-0 flex-1 flex-col lg:mt-0">
         <section className="glass-card page-hero">
           <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
             <div>
@@ -651,7 +651,7 @@ export function SeriesPage() {
           </div>
         ) : (
           <>
-            <div className="overflow-y-auto flex-1">
+            <div className="overflow-y-auto flex-1 min-h-0 nav-clearance">
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3">
                 {displayedSeries.map((s) => (
                   <ContentCard

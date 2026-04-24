@@ -199,7 +199,7 @@ export function Dashboard() {
   };
 
   return (
-    <div className="page-shell space-y-6">
+    <div className="page-shell h-full overflow-y-auto space-y-6 nav-clearance">
       <section className="glass-card page-hero overflow-hidden">
         <div className="flex flex-col gap-5 xl:flex-row xl:items-end xl:justify-between">
           <div>

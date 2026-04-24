@@ -45,14 +45,14 @@ export function LiveTV() {
   }
 
   return (
-    <div className="page-shell lg:grid lg:grid-cols-[260px_minmax(0,1fr)] lg:gap-6">
+    <div className="page-shell flex min-h-0 h-full flex-col lg:grid lg:grid-cols-[260px_minmax(0,1fr)] lg:gap-6">
       <CategorySidebar
         categories={categories}
         selected={selectedCategory}
         onSelect={setSelectedCategory}
       />
 
-      <div className="mt-5 flex min-w-0 flex-col lg:mt-0">
+      <div className="mt-5 flex min-w-0 min-h-0 flex-1 flex-col lg:mt-0">
         <section className="glass-card page-hero">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
             <div>
@@ -87,7 +87,7 @@ export function LiveTV() {
             </div>
           </div>
         ) : (
-          <div className="flex-1 overflow-y-auto">
+          <div className="flex-1 min-h-0 overflow-y-auto nav-clearance">
             <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 sm:gap-3 xl:grid-cols-5 2xl:grid-cols-6">
               {streams.map((stream) => (
                 <button

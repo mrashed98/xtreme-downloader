@@ -235,7 +235,11 @@ a {
 .app-shell__main {
   flex: 1;
   min-height: 0;
-  overflow: auto;
+  overflow: hidden;
+}
+
+/* Applied to every scrollable region so content clears the mobile bottom nav */
+.nav-clearance {
   padding-bottom: calc(4.8rem + env(safe-area-inset-bottom));
 }
 
@@ -385,6 +389,10 @@ a {
   }
 
   .app-shell__main {
+    padding-bottom: 0;
+  }
+
+  .nav-clearance {
     padding-bottom: 1.5rem;
   }
 

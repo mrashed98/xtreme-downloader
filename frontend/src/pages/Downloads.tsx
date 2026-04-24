@@ -395,7 +395,7 @@ export function Downloads() {
   };
 
   return (
-    <div className="page-shell space-y-5">
+    <div className="page-shell h-full overflow-y-auto space-y-5 nav-clearance">
       <section className="glass-card page-hero">
         <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
           <div>
@@ -453,7 +453,7 @@ export function Downloads() {
           </div>
         </GlassCard>
       ) : (
-        <div className="space-y-3 overflow-y-auto pr-1 lg:max-h-[calc(100vh-20rem)]">
+        <div className="space-y-3 pr-1">
           {downloads.map((dl) => (
             <DownloadRow
               key={dl.id}
