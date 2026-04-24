@@ -47,15 +47,39 @@ export interface VodStream {
   tmdb_id?: string | null;
   movie_image?: string | null;
   backdrop?: string | null;
+  backdrop_path?: string[] | null;
   youtube_trailer?: string | null;
   release_date?: string | null;
   duration_secs?: number | null;
   bitrate?: number | null;
+  rating_5based?: number | null;
+
   video_codec?: string | null;
+  video_codec_long?: string | null;
+  video_profile?: string | null;
   video_width?: number | null;
   video_height?: number | null;
+  video_pix_fmt?: string | null;
+  video_aspect_ratio?: string | null;
+  video_frame_rate?: string | null;
+  video_level?: number | null;
+  video_field_order?: string | null;
+  video_bits_per_raw_sample?: string | null;
+
   audio_codec?: string | null;
+  audio_codec_long?: string | null;
+  audio_profile?: string | null;
+  audio_sample_rate?: string | null;
   audio_channels?: string | null;
+  audio_channel_count?: number | null;
+  audio_language?: string | null;
+  audio_bitrate?: string | null;
+
+  video?: Record<string, unknown> | null;
+  audio?: Record<string, unknown> | null;
+  info?: Record<string, unknown> | null;
+  movie_data?: Record<string, unknown> | null;
+
   genre: string | null;
   rating: number | null;
   language: string | null;

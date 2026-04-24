@@ -27,6 +27,35 @@ function formatBitrate(value?: number | null) {
   return `${value.toLocaleString()} kb/s`;
 }
 
+function formatBps(value?: string | null) {
+  if (!value) return null;
+  const n = Number(value);
+  if (!Number.isFinite(n) || n <= 0) return value;
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(2)} Mbps`;
+  if (n >= 1_000) return `${(n / 1_000).toFixed(0)} kbps`;
+  return `${n} bps`;
+}
+
+function formatFrameRate(value?: string | null) {
+  if (!value) return null;
+  if (value.includes("/")) {
+    const [a, b] = value.split("/").map(Number);
+    if (b) return `${(a / b).toFixed(2)} fps`;
+  }
+  return value;
+}
+
+function formatSampleRate(value?: string | null) {
+  if (!value) return null;
+  const n = Number(value);
+  if (!Number.isFinite(n) || n <= 0) return value;
+  return `${(n / 1000).toFixed(1)} kHz`;
+}
+
+const DASH = "—";
+const fb = <T,>(v: T | null | undefined, fmt?: (v: T) => string | null): string =>
+  v === null || v === undefined || v === "" ? DASH : (fmt ? (fmt(v) ?? DASH) : String(v));
+
 function VodInfoModal({
   stream,
   playlistId,
@@ -56,22 +85,52 @@ function VodInfoModal({
   const tmdbUrl = detail.tmdb_id ? `https://www.themoviedb.org/movie/${detail.tmdb_id}` : null;
   const trailerUrl = detail.youtube_trailer ? `https://www.youtube.com/watch?v=${detail.youtube_trailer}` : null;
   const resolution = detail.video_width && detail.video_height
-    ? `${detail.video_width} x ${detail.video_height}`
+    ? `${detail.video_width} × ${detail.video_height}`
     : null;
-  const technicalFacts = [
-    formatReleaseDate(detail.release_date) ? { label: "Release", value: formatReleaseDate(detail.release_date)! } : null,
-    detail.duration ? { label: "Runtime", value: detail.duration } : null,
-    detail.language ? { label: "Language", value: detail.language } : null,
-    detail.container_extension ? { label: "Format", value: detail.container_extension.toUpperCase() } : null,
-    resolution ? { label: "Resolution", value: resolution } : null,
-    formatBitrate(detail.bitrate) ? { label: "Bitrate", value: formatBitrate(detail.bitrate)! } : null,
-    detail.video_codec ? { label: "Video", value: detail.video_codec.toUpperCase() } : null,
-    detail.audio_codec ? { label: "Audio", value: detail.audio_codec.toUpperCase() } : null,
-    detail.audio_channels ? { label: "Channels", value: detail.audio_channels } : null,
-    detail.imdb_id ? { label: "IMDb", value: detail.imdb_id } : null,
-    detail.tmdb_id ? { label: "TMDB", value: detail.tmdb_id } : null,
-    formatAdded(detail.added) ? { label: "Added", value: formatAdded(detail.added)! } : null,
-  ].filter(Boolean) as { label: string; value: string }[];
+
+  const overviewFacts: { label: string; value: string }[] = [
+    { label: "Release", value: fb(detail.release_date, formatReleaseDate) },
+    { label: "Runtime", value: fb(detail.duration) },
+    { label: "Duration (s)", value: fb(detail.duration_secs, (v) => v.toLocaleString()) },
+    { label: "Language", value: fb(detail.language) },
+    { label: "Genre", value: fb(detail.genre) },
+    { label: "Rating", value: fb(detail.rating, (v) => v.toFixed(1)) },
+    { label: "Rating /5", value: fb(detail.rating_5based, (v) => v.toFixed(1)) },
+    { label: "Added", value: fb(detail.added, (v) => formatAdded(v)) },
+    { label: "Format", value: fb(detail.container_extension, (v) => v.toUpperCase()) },
+    { label: "Overall bitrate", value: fb(detail.bitrate, formatBitrate) },
+  ];
+
+  const videoFacts: { label: string; value: string }[] = [
+    { label: "Resolution", value: fb(resolution) },
+    { label: "Codec", value: fb(detail.video_codec, (v) => v.toUpperCase()) },
+    { label: "Codec (long)", value: fb(detail.video_codec_long) },
+    { label: "Profile", value: fb(detail.video_profile) },
+    { label: "Level", value: fb(detail.video_level) },
+    { label: "Aspect ratio", value: fb(detail.video_aspect_ratio) },
+    { label: "Pixel format", value: fb(detail.video_pix_fmt) },
+    { label: "Frame rate", value: fb(detail.video_frame_rate, formatFrameRate) },
+    { label: "Field order", value: fb(detail.video_field_order) },
+    { label: "Bit depth", value: fb(detail.video_bits_per_raw_sample) },
+  ];
+
+  const audioFacts: { label: string; value: string }[] = [
+    { label: "Codec", value: fb(detail.audio_codec, (v) => v.toUpperCase()) },
+    { label: "Codec (long)", value: fb(detail.audio_codec_long) },
+    { label: "Profile", value: fb(detail.audio_profile) },
+    { label: "Channel layout", value: fb(detail.audio_channels) },
+    { label: "Channels", value: fb(detail.audio_channel_count) },
+    { label: "Sample rate", value: fb(detail.audio_sample_rate, formatSampleRate) },
+    { label: "Language", value: fb(detail.audio_language) },
+    { label: "Bitrate", value: fb(detail.audio_bitrate, formatBps) },
+  ];
+
+  const idFacts: { label: string; value: string }[] = [
+    { label: "IMDb", value: fb(detail.imdb_id) },
+    { label: "TMDB", value: fb(detail.tmdb_id) },
+    { label: "Stream ID", value: fb(detail.stream_id) },
+    { label: "Category", value: fb(detail.category_id) },
+  ];
 
   const handleWatch = async () => {
     setWatching(true);
@@ -157,19 +216,15 @@ function VodInfoModal({
               {detail.duration && <span className="text-xs text-white/40">{detail.duration}</span>}
               </div>
 
-              {detail.director && (
-                <p className="text-xs text-white/50 mt-3">
-                  <span className="text-white/30">Director:</span> {detail.director}
-                </p>
-              )}
-              {detail.cast && (
-                <p className="text-xs text-white/50 mt-1 leading-relaxed">
-                  <span className="text-white/30">Cast:</span> {detail.cast}
-                </p>
-              )}
-              {detail.plot && (
-                <p className="text-sm text-white/60 mt-4 leading-relaxed">{detail.plot}</p>
-              )}
+              <p className="text-xs text-white/50 mt-3">
+                <span className="text-white/30">Director:</span> {fb(detail.director)}
+              </p>
+              <p className="text-xs text-white/50 mt-1 leading-relaxed">
+                <span className="text-white/30">Cast:</span> {fb(detail.cast)}
+              </p>
+              <p className="text-sm text-white/60 mt-4 leading-relaxed">
+                {detail.plot || <span className="text-white/30">No plot available.</span>}
+              </p>
 
               <div className="mt-4 flex flex-wrap gap-3 text-sm">
                 {trailerUrl && (
@@ -248,19 +303,48 @@ function VodInfoModal({
             </div>
           </div>
 
-          {technicalFacts.length > 0 && (
-            <div className="mt-6 grid grid-cols-2 gap-2 sm:grid-cols-3">
-              {technicalFacts.map((fact) => (
-                <div key={fact.label} className="rounded-2xl border border-white/8 bg-white/[0.03] px-3 py-2">
-                  <p className="text-[0.68rem] font-semibold uppercase tracking-[0.18em] text-white/35">
-                    {fact.label}
-                  </p>
-                  <p className="mt-1 text-sm text-white/80 break-words">{fact.value}</p>
-                </div>
-              ))}
+          <FactSection title="Overview" facts={overviewFacts} />
+          <FactSection title="Video" facts={videoFacts} />
+          <FactSection title="Audio" facts={audioFacts} />
+          <FactSection title="Identifiers" facts={idFacts} />
+
+          {detail.backdrop_path && detail.backdrop_path.length > 0 && (
+            <div className="mt-6">
+              <p className="text-[0.68rem] font-semibold uppercase tracking-[0.2em] text-white/45">
+                Backdrops
+              </p>
+              <div className="mt-2 flex gap-2 overflow-x-auto pb-1">
+                {detail.backdrop_path.map((src, i) => (
+                  <img
+                    key={i}
+                    src={src}
+                    alt={`backdrop ${i + 1}`}
+                    className="h-28 flex-shrink-0 rounded-xl object-cover"
+                    onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
+                  />
+                ))}
+              </div>
             </div>
           )}
         </div>
+      </div>
+    </div>
+  );
+}
+
+function FactSection({ title, facts }: { title: string; facts: { label: string; value: string }[] }) {
+  return (
+    <div className="mt-6">
+      <p className="text-[0.68rem] font-semibold uppercase tracking-[0.2em] text-white/45">{title}</p>
+      <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-3">
+        {facts.map((fact) => (
+          <div key={fact.label} className="rounded-2xl border border-white/8 bg-white/[0.03] px-3 py-2">
+            <p className="text-[0.65rem] font-semibold uppercase tracking-[0.18em] text-white/35">
+              {fact.label}
+            </p>
+            <p className="mt-1 text-sm text-white/80 break-words">{fact.value}</p>
+          </div>
+        ))}
       </div>
     </div>
   );

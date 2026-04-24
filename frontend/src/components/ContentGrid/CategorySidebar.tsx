@@ -16,7 +16,7 @@ export function CategorySidebar({ categories, selected, onSelect }: CategorySide
     : categories;
 
   return (
-    <section className="glass-card flex flex-col gap-3 overflow-hidden p-3 lg:h-full lg:min-h-0 lg:w-64 lg:p-4">
+    <section className="glass-card flex flex-col gap-3 overflow-hidden p-3 lg:sticky lg:top-0 lg:max-h-[calc(100dvh-2rem)] lg:w-64 lg:self-start lg:p-4">
       <div className="flex items-center justify-between gap-3">
         <div>
           <p className="text-[0.65rem] font-semibold uppercase tracking-[0.3em] text-white/35">

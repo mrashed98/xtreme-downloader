@@ -35,6 +35,24 @@ def _build_vod_detail_payload(stream: VodStream, raw_info: dict | None) -> dict:
     movie_data = raw_info.get("movie_data") or {}
     video = info.get("video") or {}
     audio = info.get("audio") or {}
+    audio_tags = audio.get("tags") or {}
+
+    backdrop_path = info.get("backdrop_path")
+    if isinstance(backdrop_path, str):
+        backdrop_path = [backdrop_path]
+    elif not isinstance(backdrop_path, list):
+        backdrop_path = None
+
+    rating_raw = info.get("rating")
+    try:
+        rating_val = float(rating_raw) if rating_raw not in (None, "") else base.get("rating")
+    except (TypeError, ValueError):
+        rating_val = base.get("rating")
+
+    try:
+        rating_5 = float(info.get("rating_5based")) if info.get("rating_5based") is not None else None
+    except (TypeError, ValueError):
+        rating_5 = None
 
     return {
         **base,
@@ -43,21 +61,44 @@ def _build_vod_detail_payload(stream: VodStream, raw_info: dict | None) -> dict:
         "genre": info.get("genre") or base.get("genre"),
         "cast": info.get("cast") or base.get("cast"),
         "director": info.get("director") or base.get("director"),
-        "rating": info.get("rating") or base.get("rating"),
+        "rating": rating_val,
         "plot": info.get("plot") or base.get("plot"),
         "duration": info.get("duration") or base.get("duration"),
         "tmdb_id": info.get("tmdb_id"),
         "movie_image": info.get("movie_image"),
         "backdrop": info.get("backdrop"),
+        "backdrop_path": backdrop_path,
         "youtube_trailer": info.get("youtube_trailer"),
         "release_date": info.get("releasedate"),
         "duration_secs": info.get("duration_secs"),
         "bitrate": info.get("bitrate"),
+        "rating_5based": rating_5,
+
         "video_codec": video.get("codec_name"),
+        "video_codec_long": video.get("codec_long_name"),
+        "video_profile": video.get("profile"),
         "video_width": video.get("width"),
         "video_height": video.get("height"),
+        "video_pix_fmt": video.get("pix_fmt"),
+        "video_aspect_ratio": video.get("display_aspect_ratio"),
+        "video_frame_rate": video.get("r_frame_rate") or video.get("avg_frame_rate"),
+        "video_level": video.get("level"),
+        "video_field_order": video.get("field_order"),
+        "video_bits_per_raw_sample": video.get("bits_per_raw_sample"),
+
         "audio_codec": audio.get("codec_name"),
+        "audio_codec_long": audio.get("codec_long_name"),
+        "audio_profile": audio.get("profile"),
+        "audio_sample_rate": audio.get("sample_rate"),
         "audio_channels": audio.get("channel_layout"),
+        "audio_channel_count": audio.get("channels"),
+        "audio_language": audio_tags.get("language"),
+        "audio_bitrate": audio_tags.get("BPS") or audio_tags.get("BPS-eng"),
+
+        "video": video or None,
+        "audio": audio or None,
+        "info": info or None,
+        "movie_data": movie_data or None,
     }
 
 
