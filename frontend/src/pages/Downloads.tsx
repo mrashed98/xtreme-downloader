@@ -58,7 +58,7 @@ function SettingsPanel({ onClose }: { onClose: () => void }) {
   useEffect(() => {
     if (remoteSettings) {
       setConcurrent(remoteSettings.max_concurrent_downloads);
-      setChunks(1);
+      setChunks(remoteSettings.download_chunks);
       const { value, unit } = bpsToDisplay(remoteSettings.speed_limit_bps);
       setSpeedUnit(unit);
       setSpeedValue(value);

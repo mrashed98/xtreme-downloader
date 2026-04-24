@@ -192,7 +192,12 @@ export function VideoPlayer() {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 backdrop-blur-sm animate-fade-in">
-      <div className="relative mx-4 w-full max-w-5xl">
+      <div
+        className="relative mx-4 w-full max-w-5xl"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="video-player-title"
+      >
         <div className="mb-2 flex items-center justify-between">
           <div className="flex min-w-0 items-center gap-2">
             {player.queue.length > 1 && (
@@ -200,30 +205,36 @@ export function VideoPlayer() {
                 {player.queueIndex + 1} / {player.queue.length}
               </span>
             )}
-            <h3 className="truncate font-medium text-white">{currentItem.title}</h3>
+            <h3 id="video-player-title" className="truncate font-medium text-white">{currentItem.title}</h3>
           </div>
           <div className="flex flex-shrink-0 items-center gap-1">
             {hasPrev && (
               <button
+                type="button"
                 onClick={handlePrev}
                 className="rounded-lg p-2 text-white/60 transition-colors hover:bg-white/10 hover:text-white"
                 title="Previous"
+                aria-label="Play previous item"
               >
                 <SkipBack size={18} />
               </button>
             )}
             {hasNext && (
               <button
+                type="button"
                 onClick={handleNext}
                 className="rounded-lg p-2 text-white/60 transition-colors hover:bg-white/10 hover:text-white"
                 title="Next episode"
+                aria-label="Play next item"
               >
                 <SkipForward size={18} />
               </button>
             )}
             <button
+              type="button"
               onClick={closePlayer}
               className="rounded-lg p-2 text-white/70 transition-colors hover:bg-white/10 hover:text-white"
+              aria-label="Close player"
             >
               <X size={20} />
             </button>
@@ -255,6 +266,7 @@ export function VideoPlayer() {
                 <p className="mt-2 text-sm leading-relaxed text-white/65">{playbackError}</p>
                 <div className="mt-4 flex justify-center gap-3">
                   <button
+                    type="button"
                     onClick={handleRetry}
                     className="flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-4 py-2 text-sm text-white/80 transition-colors hover:bg-white/10"
                   >
@@ -262,6 +274,7 @@ export function VideoPlayer() {
                     Retry
                   </button>
                   <button
+                    type="button"
                     onClick={closePlayer}
                     className="rounded-xl px-4 py-2 text-sm font-medium btn-accent"
                   >
@@ -280,13 +293,16 @@ export function VideoPlayer() {
                   <p className="truncate text-sm font-medium text-white">{nextItem.title}</p>
                 </div>
                 <button
+                  type="button"
                   onClick={handleDismissUpNext}
                   className="flex-shrink-0 text-white/40 hover:text-white"
+                  aria-label="Dismiss up next"
                 >
                   <X size={14} />
                 </button>
               </div>
               <button
+                type="button"
                 onClick={handleNext}
                 className="mt-2 flex w-full items-center justify-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium btn-accent"
               >
@@ -301,6 +317,7 @@ export function VideoPlayer() {
           <div className="mt-2 flex gap-1.5 overflow-x-auto pb-1">
             {player.queue.map((item, i) => (
               <button
+                type="button"
                 key={i}
                 onClick={() => {
                   clearCountdown();

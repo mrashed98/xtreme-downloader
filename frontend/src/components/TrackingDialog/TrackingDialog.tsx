@@ -19,6 +19,8 @@ export function TrackingDialog({ series, seasons, tracking, onClose, onTracked }
   const [trackAll, setTrackAll] = useState(tracking?.track_all_seasons ?? true);
   const [selectedSeasons, setSelectedSeasons] = useState<number[]>(tracking?.seasons_json ?? []);
   const [loading, setLoading] = useState(false);
+  const languageId = `tracking-language-${series.series_id}`;
+  const seasonsLabelId = `tracking-seasons-${series.series_id}`;
 
   const toggleSeason = (num: number) => {
     setSelectedSeasons((prev) =>
@@ -50,14 +52,19 @@ export function TrackingDialog({ series, seasons, tracking, onClose, onTracked }
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm animate-fade-in">
-      <div className="glass-card w-full max-w-md mx-4 p-6 animate-slide-up">
+      <div
+        className="glass-card w-full max-w-md mx-4 p-6 animate-slide-up"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="tracking-dialog-title"
+      >
         {/* Header */}
         <div className="flex items-center justify-between mb-5">
           <div className="flex items-center gap-2">
             <BookmarkPlus size={18} className="text-purple-400" />
-            <h2 className="text-white font-semibold">Track Series</h2>
+            <h2 id="tracking-dialog-title" className="text-white font-semibold">Track Series</h2>
           </div>
-          <button onClick={onClose} className="text-white/50 hover:text-white">
+          <button type="button" onClick={onClose} className="text-white/50 hover:text-white" aria-label="Close tracking dialog">
             <X size={18} />
           </button>
         </div>
@@ -66,10 +73,11 @@ export function TrackingDialog({ series, seasons, tracking, onClose, onTracked }
 
         {/* Language */}
         <div className="mb-4">
-          <label className="block text-xs font-semibold text-white/50 uppercase tracking-wider mb-2">
+          <label htmlFor={languageId} className="block text-xs font-semibold text-white/50 uppercase tracking-wider mb-2">
             Download Language
           </label>
           <select
+            id={languageId}
             value={language}
             onChange={(e) => setLanguage(e.target.value)}
             className="w-full glass-input"
@@ -84,9 +92,9 @@ export function TrackingDialog({ series, seasons, tracking, onClose, onTracked }
 
         {/* Season selection */}
         <div className="mb-5">
-          <label className="block text-xs font-semibold text-white/50 uppercase tracking-wider mb-2">
+          <p id={seasonsLabelId} className="block text-xs font-semibold text-white/50 uppercase tracking-wider mb-2">
             Seasons
-          </label>
+          </p>
 
           <label className="flex items-center gap-2 mb-3 cursor-pointer">
             <input
@@ -99,11 +107,13 @@ export function TrackingDialog({ series, seasons, tracking, onClose, onTracked }
           </label>
 
           {!trackAll && (
-            <div className="grid grid-cols-4 gap-2 mt-2">
+            <div className="grid grid-cols-4 gap-2 mt-2" role="group" aria-labelledby={seasonsLabelId}>
               {seasons.map((s) => (
                 <button
+                  type="button"
                   key={s.season_num}
                   onClick={() => toggleSeason(s.season_num)}
+                  aria-pressed={selectedSeasons.includes(s.season_num)}
                   className={`py-1.5 rounded-lg text-sm font-medium transition-colors ${
                     selectedSeasons.includes(s.season_num)
                       ? "btn-accent"
@@ -123,17 +133,19 @@ export function TrackingDialog({ series, seasons, tracking, onClose, onTracked }
         {/* Actions */}
         <div className="flex gap-3">
           <button
+            type="button"
             onClick={onClose}
             className="flex-1 py-2.5 rounded-lg bg-white/5 hover:bg-white/10 text-white/70 hover:text-white text-sm transition-colors"
           >
             Cancel
           </button>
           <button
+            type="button"
             onClick={handleSubmit}
             disabled={loading || (!trackAll && selectedSeasons.length === 0)}
             className="flex-1 py-2.5 rounded-lg btn-accent text-sm font-medium disabled:opacity-50"
           >
-            {loading ? "Saving..." : "Track Series"}
+            {loading ? "Saving…" : "Track Series"}
           </button>
         </div>
       </div>

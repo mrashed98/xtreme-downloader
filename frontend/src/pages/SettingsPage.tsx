@@ -41,6 +41,11 @@ function PlaylistModal({
   onSaved: () => void;
   existing?: Playlist | null;
 }) {
+  const nameId = existing ? `settings-playlist-name-${existing.id}` : "settings-playlist-name";
+  const urlId = existing ? `settings-playlist-url-${existing.id}` : "settings-playlist-url";
+  const usernameId = existing ? `settings-playlist-username-${existing.id}` : "settings-playlist-username";
+  const passwordId = existing ? `settings-playlist-password-${existing.id}` : "settings-playlist-password";
+
   const [form, setForm] = useState<PlaylistFormData>({
     name: existing?.name || "",
     base_url: existing?.base_url || "",
@@ -74,50 +79,65 @@ function PlaylistModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm">
-      <GlassCard className="mx-4 w-full max-w-md p-6 animate-slide-up">
-        <h2 className="mb-5 text-lg font-semibold text-white">
+      <GlassCard className="mx-4 w-full max-w-md p-6 animate-slide-up" role="dialog" aria-modal="true" aria-labelledby="settings-playlist-modal-title">
+        <h2 id="settings-playlist-modal-title" className="mb-5 text-lg font-semibold text-white">
           {existing ? "Edit Server" : "Add Server"}
         </h2>
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-white/50">Name</label>
+            <label htmlFor={nameId} className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-white/50">Name</label>
             <input
+              id={nameId}
               className="glass-input w-full"
               placeholder="My IPTV"
+              autoComplete="off"
+              name="name"
               value={form.name}
               onChange={(e) => setForm({ ...form, name: e.target.value })}
               required
             />
           </div>
           <div>
-            <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-white/50">Server URL</label>
+            <label htmlFor={urlId} className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-white/50">Server URL</label>
             <input
+              id={urlId}
+              type="url"
               className="glass-input w-full"
               placeholder="http://server.example.com:8080"
+              autoComplete="url"
+              name="base_url"
+              spellCheck={false}
               value={form.base_url}
               onChange={(e) => setForm({ ...form, base_url: e.target.value })}
               required
             />
           </div>
           <div>
-            <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-white/50">Username</label>
+            <label htmlFor={usernameId} className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-white/50">Username</label>
             <input
+              id={usernameId}
               className="glass-input w-full"
               placeholder="username"
+              autoComplete="username"
+              name="username"
+              spellCheck={false}
               value={form.username}
               onChange={(e) => setForm({ ...form, username: e.target.value })}
               required
             />
           </div>
           <div>
-            <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-white/50">
+            <label htmlFor={passwordId} className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-white/50">
               Password {existing && "(leave blank to keep)"}
             </label>
             <input
+              id={passwordId}
               type="password"
               className="glass-input w-full"
               placeholder="password"
+              autoComplete={existing ? "current-password" : "new-password"}
+              name="password"
               value={form.password}
               onChange={(e) => setForm({ ...form, password: e.target.value })}
               required={!existing}

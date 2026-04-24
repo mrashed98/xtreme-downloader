@@ -68,6 +68,8 @@ export function LiveTV() {
         <div className="relative mb-4 mt-5">
           <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-white/40" />
           <input
+            type="search"
+            aria-label="Search channels"
             className="w-full glass-input pl-11"
             placeholder="Search channels..."
             value={search}
@@ -99,6 +101,10 @@ export function LiveTV() {
                     <img
                       src={stream.icon}
                       alt={stream.name}
+                      width="56"
+                      height="56"
+                      loading="lazy"
+                      decoding="async"
                       className="h-14 w-14 rounded-2xl object-contain"
                       onError={(e) => {
                         (e.target as HTMLImageElement).style.display = "none";

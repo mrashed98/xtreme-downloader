@@ -7,6 +7,7 @@ import { toast } from "sonner";
 import { downloadsApi, playlistsApi, seriesApi, vodApi, type Playlist } from "../api/client";
 import { useAppStore } from "../store";
 import { GlassCard } from "../components/Layout/GlassCard";
+import { formatDateTime } from "../utils/format";
 
 interface StatCardProps {
   label: string;
@@ -45,6 +46,11 @@ function PlaylistModal({
   onSaved: () => void;
   existing?: Playlist | null;
 }) {
+  const nameId = existing ? `dashboard-playlist-name-${existing.id}` : "dashboard-playlist-name";
+  const urlId = existing ? `dashboard-playlist-url-${existing.id}` : "dashboard-playlist-url";
+  const usernameId = existing ? `dashboard-playlist-username-${existing.id}` : "dashboard-playlist-username";
+  const passwordId = existing ? `dashboard-playlist-password-${existing.id}` : "dashboard-playlist-password";
+
   const [form, setForm] = useState<PlaylistFormData>({
     name: existing?.name || "",
     base_url: existing?.base_url || "",
@@ -78,50 +84,67 @@ function PlaylistModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm">
-      <GlassCard className="w-full max-w-md mx-4 p-6 animate-slide-up">
+      <GlassCard className="w-full max-w-md mx-4 p-6 animate-slide-up" role="dialog" aria-modal="true" aria-labelledby="playlist-modal-title">
         <h2 className="text-lg font-semibold text-white mb-5">
+          <span id="playlist-modal-title">
           {existing ? "Edit Playlist" : "Add Playlist"}
+          </span>
         </h2>
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="block text-xs font-semibold text-white/50 uppercase tracking-wider mb-1.5">Name</label>
+            <label htmlFor={nameId} className="block text-xs font-semibold text-white/50 uppercase tracking-wider mb-1.5">Name</label>
             <input
+              id={nameId}
               className="w-full glass-input"
               placeholder="My IPTV"
+              autoComplete="off"
+              name="name"
               value={form.name}
               onChange={(e) => setForm({ ...form, name: e.target.value })}
               required
             />
           </div>
           <div>
-            <label className="block text-xs font-semibold text-white/50 uppercase tracking-wider mb-1.5">Server URL</label>
+            <label htmlFor={urlId} className="block text-xs font-semibold text-white/50 uppercase tracking-wider mb-1.5">Server URL</label>
             <input
+              id={urlId}
+              type="url"
               className="w-full glass-input"
               placeholder="http://server.example.com:8080"
+              autoComplete="url"
+              name="base_url"
+              spellCheck={false}
               value={form.base_url}
               onChange={(e) => setForm({ ...form, base_url: e.target.value })}
               required
             />
           </div>
           <div>
-            <label className="block text-xs font-semibold text-white/50 uppercase tracking-wider mb-1.5">Username</label>
+            <label htmlFor={usernameId} className="block text-xs font-semibold text-white/50 uppercase tracking-wider mb-1.5">Username</label>
             <input
+              id={usernameId}
               className="w-full glass-input"
               placeholder="username"
+              autoComplete="username"
+              name="username"
+              spellCheck={false}
               value={form.username}
               onChange={(e) => setForm({ ...form, username: e.target.value })}
               required
             />
           </div>
           <div>
-            <label className="block text-xs font-semibold text-white/50 uppercase tracking-wider mb-1.5">
+            <label htmlFor={passwordId} className="block text-xs font-semibold text-white/50 uppercase tracking-wider mb-1.5">
               Password {existing && "(leave blank to keep)"}
             </label>
             <input
+              id={passwordId}
               type="password"
               className="w-full glass-input"
               placeholder="password"
+              autoComplete={existing ? "current-password" : "new-password"}
+              name="password"
               value={form.password}
               onChange={(e) => setForm({ ...form, password: e.target.value })}
               required={!existing}
@@ -256,9 +279,14 @@ export function Dashboard() {
                 }`}
               >
                 <div
-                  className="flex-1 cursor-pointer"
-                  onClick={() => setActivePlaylistId(p.id)}
+                  className="flex-1"
                 >
+                  <button
+                    type="button"
+                    className="w-full cursor-pointer text-left"
+                    onClick={() => setActivePlaylistId(p.id)}
+                    aria-pressed={p.id === activePlaylistId}
+                  >
                   <div className="flex flex-wrap items-center gap-2">
                     <div className={`w-2 h-2 rounded-full ${p.is_active ? "bg-green-400" : "bg-white/20"}`} />
                     <span className="font-medium text-white text-sm">{p.name}</span>
@@ -271,9 +299,10 @@ export function Dashboard() {
                   </p>
                   {p.last_synced_at && (
                     <p className="text-xs text-white/30 mt-0.5 ml-4">
-                      Last sync: {new Date(p.last_synced_at).toLocaleString()}
+                      Last sync: {formatDateTime(p.last_synced_at)}
                     </p>
                   )}
+                  </button>
                 </div>
 
                 <div className="flex items-center gap-2 self-end sm:self-auto">
@@ -335,7 +364,7 @@ export function Dashboard() {
                 {latestMovies.length ? latestMovies.map((item) => (
                   <div key={item.stream_id} className="flex items-center gap-3">
                     <div className="h-12 w-10 overflow-hidden rounded-xl bg-white/5">
-                      {item.icon && <img src={item.icon} alt={item.name} className="h-full w-full object-cover" />}
+                      {item.icon && <img src={item.icon} alt={item.name} width="40" height="48" loading="lazy" decoding="async" className="h-full w-full object-cover" />}
                     </div>
                     <div className="min-w-0">
                       <p className="truncate text-sm font-medium text-white">{item.name}</p>
@@ -355,7 +384,7 @@ export function Dashboard() {
                 {latestSeries.length ? latestSeries.map((item) => (
                   <div key={item.series_id} className="flex items-center gap-3">
                     <div className="h-12 w-10 overflow-hidden rounded-xl bg-white/5">
-                      {item.cover && <img src={item.cover} alt={item.name} className="h-full w-full object-cover" />}
+                      {item.cover && <img src={item.cover} alt={item.name} width="40" height="48" loading="lazy" decoding="async" className="h-full w-full object-cover" />}
                     </div>
                     <div className="min-w-0">
                       <p className="truncate text-sm font-medium text-white">{item.name}</p>
