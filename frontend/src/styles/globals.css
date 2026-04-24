@@ -191,8 +191,7 @@ a {
 .app-shell {
   position: relative;
   display: flex;
-  min-height: 100vh;
-  min-height: 100dvh;
+  height: 100dvh;
   overflow: hidden;
   padding-top: env(safe-area-inset-top);
 }
