@@ -225,7 +225,6 @@ a {
 .app-sidebar {
   position: relative;
   z-index: 2;
-  margin: 1rem;
   border-radius: 32px;
   border: 1px solid rgba(255, 255, 255, 0.08);
   background:
@@ -235,6 +234,7 @@ a {
 }
 
 .app-sidebar--desktop {
+  margin: 1rem;
   position: sticky;
   top: 1rem;
   height: calc(100dvh - 2rem);
@@ -252,7 +252,7 @@ a {
 }
 
 .page-shell {
-  padding: 0.5rem 1rem 6.5rem;
+  padding: 0.5rem 1rem 1rem;
 }
 
 .page-hero {
@@ -305,30 +305,40 @@ a {
 .mobile-bottom-nav__inner {
   pointer-events: auto;
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
-  gap: 0.35rem;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 0.2rem;
   border-radius: 28px;
   border: 1px solid rgba(255, 255, 255, 0.1);
   background: rgba(7, 13, 22, 0.82);
   backdrop-filter: blur(24px);
   -webkit-backdrop-filter: blur(24px);
   box-shadow: 0 22px 60px rgba(3, 8, 14, 0.42);
-  padding: 0.45rem;
+  padding: 0.4rem 0.35rem;
 }
 
 .mobile-bottom-nav__item {
   position: relative;
   display: flex;
-  min-height: 4rem;
+  min-height: 3.6rem;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 0.28rem;
-  border-radius: 22px;
+  gap: 0.24rem;
+  padding: 0.2rem 0.15rem;
+  border-radius: 18px;
   color: rgba(233, 239, 244, 0.58);
-  font-size: 0.68rem;
+  font-size: 0.62rem;
   font-weight: 700;
+  line-height: 1;
+  text-align: center;
   transition: background-color 0.2s, color 0.2s, transform 0.2s;
+}
+
+.mobile-bottom-nav__item > span:last-child {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .mobile-bottom-nav__item--active {
