@@ -10,6 +10,7 @@ import { LiveTV } from "./pages/LiveTV";
 import { Movies } from "./pages/Movies";
 import { SeriesPage } from "./pages/SeriesPage";
 import { Downloads } from "./pages/Downloads";
+import { SettingsPage } from "./pages/SettingsPage";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -36,6 +37,7 @@ export default function App() {
                 <Route path="/movies" element={<Movies />} />
                 <Route path="/series" element={<SeriesPage />} />
                 <Route path="/downloads" element={<Downloads />} />
+                <Route path="/settings" element={<SettingsPage />} />
               </Routes>
             </main>
           </div>

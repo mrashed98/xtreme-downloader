@@ -398,11 +398,23 @@ export function SeriesPage() {
     enabled: !!activePlaylistId,
   });
 
+  const seriesCategories = [
+    {
+      id: -1,
+      playlist_id: activePlaylistId ?? 0,
+      type: "series",
+      category_id: "__latest__",
+      name: "Latest 50",
+    },
+    ...categories,
+  ];
+
   const { data: seriesList = [], isLoading } = useQuery({
     queryKey: ["series-list", activePlaylistId, selectedCategory, search, language, genre, selectedActors, ratingMin, page],
     queryFn: () =>
       seriesApi.list(activePlaylistId!, {
-        category_id: selectedCategory || undefined,
+        category_id: selectedCategory === "__latest__" ? undefined : selectedCategory || undefined,
+        latest: selectedCategory === "__latest__",
         search: search || undefined,
         language: language || undefined,
         genre: genre || undefined,
@@ -476,7 +488,7 @@ export function SeriesPage() {
   return (
     <div className="page-shell lg:grid lg:grid-cols-[260px_minmax(0,1fr)] lg:gap-6">
       <CategorySidebar
-        categories={categories}
+        categories={seriesCategories}
         selected={selectedCategory}
         onSelect={(id) => { setSelectedCategory(id); setPage(0); }}
       />
@@ -503,7 +515,7 @@ export function SeriesPage() {
           <div className="relative flex-1 min-w-48">
             <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-white/40" />
             <input
-              className="w-full glass-input pl-9 text-sm"
+              className="w-full glass-input pl-11 text-sm"
               placeholder="Search series..."
               value={search}
               onChange={(e) => { setSearch(e.target.value); setPage(0); }}
@@ -556,7 +568,7 @@ export function SeriesPage() {
                   <div className="relative">
                     <Search size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-white/30" />
                     <input
-                      className="w-full glass-input pl-8 py-1.5 text-xs"
+                      className="w-full glass-input pl-10 py-1.5 text-xs"
                       placeholder="Search actors..."
                       value={actorSearch}
                       onChange={(e) => setActorSearch(e.target.value)}

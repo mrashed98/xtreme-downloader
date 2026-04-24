@@ -1,9 +1,10 @@
 import { useQuery } from "@tanstack/react-query";
 import { Film, Tv, Clapperboard, Download, Plus, RefreshCw, Trash2, Edit } from "lucide-react";
 import { useState } from "react";
+import { Link } from "react-router-dom";
 import axios from "axios";
 import { toast } from "sonner";
-import { playlistsApi, downloadsApi, type Playlist } from "../api/client";
+import { downloadsApi, playlistsApi, seriesApi, vodApi, type Playlist } from "../api/client";
 import { useAppStore } from "../store";
 import { GlassCard } from "../components/Layout/GlassCard";
 
@@ -161,6 +162,20 @@ export function Dashboard() {
     refetchInterval: 5000,
   });
 
+  const { data: latestMovies = [] } = useQuery({
+    queryKey: ["dashboard-latest-movies", activePlaylistId],
+    queryFn: () => vodApi.streams(activePlaylistId!, { latest: true, limit: 6 }),
+    enabled: !!activePlaylistId,
+    staleTime: 60_000,
+  });
+
+  const { data: latestSeries = [] } = useQuery({
+    queryKey: ["dashboard-latest-series", activePlaylistId],
+    queryFn: () => seriesApi.list(activePlaylistId!, { latest: true, limit: 6 }),
+    enabled: !!activePlaylistId,
+    staleTime: 60_000,
+  });
+
   const activeCount = downloads.filter((d) => d.status === "downloading").length;
   const completedCount = downloads.filter((d) => d.status === "completed").length;
   const failedCount = downloads.filter((d) => d.status === "failed").length;
@@ -297,6 +312,72 @@ export function Dashboard() {
           </div>
         )}
       </GlassCard>
+
+      <div className="grid gap-6 xl:grid-cols-3">
+        <GlassCard className="p-5 sm:p-6 xl:col-span-2">
+          <div className="mb-4 flex items-center justify-between">
+            <div>
+              <p className="page-hero__eyebrow">Latest Media</p>
+              <h2 className="mt-2 text-xl font-semibold text-white">Newest synced picks</h2>
+            </div>
+            <Link to="/settings" className="rounded-full border border-white/10 px-3 py-2 text-sm text-white/55 transition-colors hover:bg-white/5 hover:text-white">
+              Open Settings
+            </Link>
+          </div>
+
+          <div className="grid gap-4 lg:grid-cols-2">
+            <div className="rounded-[1.5rem] border border-white/8 bg-white/[0.03] p-4">
+              <div className="mb-3 flex items-center gap-2">
+                <Film size={16} className="text-amber-300" />
+                <h3 className="text-sm font-semibold text-white">Latest Movies</h3>
+              </div>
+              <div className="space-y-3">
+                {latestMovies.length ? latestMovies.map((item) => (
+                  <div key={item.stream_id} className="flex items-center gap-3">
+                    <div className="h-12 w-10 overflow-hidden rounded-xl bg-white/5">
+                      {item.icon && <img src={item.icon} alt={item.name} className="h-full w-full object-cover" />}
+                    </div>
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-medium text-white">{item.name}</p>
+                      <p className="truncate text-xs text-white/45">{item.genre || "No genre yet"}</p>
+                    </div>
+                  </div>
+                )) : <p className="text-sm text-white/35">Select a playlist to load latest movies.</p>}
+              </div>
+            </div>
+
+            <div className="rounded-[1.5rem] border border-white/8 bg-white/[0.03] p-4">
+              <div className="mb-3 flex items-center gap-2">
+                <Clapperboard size={16} className="text-emerald-300" />
+                <h3 className="text-sm font-semibold text-white">Latest Series</h3>
+              </div>
+              <div className="space-y-3">
+                {latestSeries.length ? latestSeries.map((item) => (
+                  <div key={item.series_id} className="flex items-center gap-3">
+                    <div className="h-12 w-10 overflow-hidden rounded-xl bg-white/5">
+                      {item.cover && <img src={item.cover} alt={item.name} className="h-full w-full object-cover" />}
+                    </div>
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-medium text-white">{item.name}</p>
+                      <p className="truncate text-xs text-white/45">{item.release_date || item.genre || "No release date yet"}</p>
+                    </div>
+                  </div>
+                )) : <p className="text-sm text-white/35">Select a playlist to load latest series.</p>}
+              </div>
+            </div>
+          </div>
+        </GlassCard>
+
+        <GlassCard className="p-5 sm:p-6">
+          <p className="page-hero__eyebrow">Analytics Readiness</p>
+          <h2 className="mt-2 text-xl font-semibold text-white">What we can power now</h2>
+          <div className="mt-4 space-y-3 text-sm text-white/60">
+            <p>Available now: latest added movies, latest series, favorites, downloads, server state, and sync health.</p>
+            <p>Missing for true dashboard analytics: playback history, play counters, last watched timestamps, and popularity aggregates.</p>
+            <p>Next backend step for “Recent Watched”, “Most Watched”, and “Popular”: add a playback-events table and increment counters from the watch endpoints.</p>
+          </div>
+        </GlassCard>
+      </div>
 
       {showModal && (
         <PlaylistModal

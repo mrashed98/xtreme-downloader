@@ -1,6 +1,6 @@
 import { useState, useMemo } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Download, ExternalLink, Film, Heart, Play, Search, Star, X } from "lucide-react";
+import { CalendarDays, Download, ExternalLink, Film, Heart, Play, Search, Star, X } from "lucide-react";
 import { vodApi, favoritesApi, type VodStream } from "../api/client";
 import { useAppStore } from "../store";
 import { CategorySidebar } from "../components/ContentGrid/CategorySidebar";
@@ -13,6 +13,18 @@ function formatAdded(value?: string | null) {
   const parsed = Number(value);
   if (Number.isNaN(parsed)) return value;
   return new Date(parsed * 1000).toLocaleDateString();
+}
+
+function formatReleaseDate(value?: string | null) {
+  if (!value) return null;
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return value;
+  return parsed.toLocaleDateString();
+}
+
+function formatBitrate(value?: number | null) {
+  if (!value) return null;
+  return `${value.toLocaleString()} kb/s`;
 }
 
 function VodInfoModal({
@@ -38,12 +50,26 @@ function VodInfoModal({
   });
 
   const detail = fullStream ?? stream;
+  const posterSrc = detail.movie_image || detail.icon;
+  const backdropSrc = detail.backdrop || detail.movie_image || detail.icon;
   const imdbUrl = detail.imdb_id ? `https://www.imdb.com/title/${detail.imdb_id}` : null;
+  const tmdbUrl = detail.tmdb_id ? `https://www.themoviedb.org/movie/${detail.tmdb_id}` : null;
+  const trailerUrl = detail.youtube_trailer ? `https://www.youtube.com/watch?v=${detail.youtube_trailer}` : null;
+  const resolution = detail.video_width && detail.video_height
+    ? `${detail.video_width} x ${detail.video_height}`
+    : null;
   const technicalFacts = [
+    formatReleaseDate(detail.release_date) ? { label: "Release", value: formatReleaseDate(detail.release_date)! } : null,
     detail.duration ? { label: "Runtime", value: detail.duration } : null,
     detail.language ? { label: "Language", value: detail.language } : null,
     detail.container_extension ? { label: "Format", value: detail.container_extension.toUpperCase() } : null,
+    resolution ? { label: "Resolution", value: resolution } : null,
+    formatBitrate(detail.bitrate) ? { label: "Bitrate", value: formatBitrate(detail.bitrate)! } : null,
+    detail.video_codec ? { label: "Video", value: detail.video_codec.toUpperCase() } : null,
+    detail.audio_codec ? { label: "Audio", value: detail.audio_codec.toUpperCase() } : null,
+    detail.audio_channels ? { label: "Channels", value: detail.audio_channels } : null,
     detail.imdb_id ? { label: "IMDb", value: detail.imdb_id } : null,
+    detail.tmdb_id ? { label: "TMDB", value: detail.tmdb_id } : null,
     formatAdded(detail.added) ? { label: "Added", value: formatAdded(detail.added)! } : null,
   ].filter(Boolean) as { label: string; value: string }[];
 
@@ -77,29 +103,49 @@ function VodInfoModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-sm animate-fade-in">
-      <div className="glass-card w-full max-w-2xl mx-4 p-6 animate-slide-up max-h-[90vh] overflow-y-auto">
-        <div className="flex flex-col gap-5 sm:flex-row">
-          {detail.icon && (
+      <div className="glass-card w-full max-w-4xl mx-4 animate-slide-up max-h-[90vh] overflow-y-auto">
+        {backdropSrc && (
+          <div className="relative h-52 overflow-hidden rounded-t-[1.5rem] sm:h-64">
             <img
-              src={detail.icon}
+              src={backdropSrc}
               alt={detail.name}
-              className="h-48 w-32 rounded-xl object-cover flex-shrink-0"
+              className="h-full w-full object-cover"
               onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
             />
-          )}
+            <div className="absolute inset-0 bg-gradient-to-t from-[rgba(8,12,18,0.96)] via-[rgba(8,12,18,0.48)] to-[rgba(8,12,18,0.12)]" />
+          </div>
+        )}
 
-          <div className="flex-1 min-w-0">
-            <div className="flex items-start justify-between gap-3">
-              <div>
-                <p className="page-hero__eyebrow">VOD Details</p>
-                <h2 className="mt-2 text-xl font-bold text-white">{detail.name}</h2>
+        <div className="p-6">
+          <div className="flex flex-col gap-5 sm:flex-row">
+            {posterSrc && (
+              <img
+                src={posterSrc}
+                alt={detail.name}
+                className="h-52 w-36 rounded-2xl object-cover flex-shrink-0 shadow-[0_18px_40px_rgba(0,0,0,0.35)]"
+                onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
+              />
+            )}
+
+            <div className="flex-1 min-w-0">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p className="page-hero__eyebrow">VOD Details</p>
+                  <h2 className="mt-2 text-2xl font-bold text-white">{detail.name}</h2>
+                </div>
+                <button onClick={onClose} className="text-white/50 hover:text-white flex-shrink-0">
+                  <X size={20} />
+                </button>
               </div>
-              <button onClick={onClose} className="text-white/50 hover:text-white flex-shrink-0">
-                <X size={20} />
-              </button>
-            </div>
 
-            <div className="flex flex-wrap items-center gap-2 mt-2">
+              {detail.release_date && (
+                <div className="mt-3 inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-xs text-white/60">
+                  <CalendarDays size={12} />
+                  {formatReleaseDate(detail.release_date)}
+                </div>
+              )}
+
+              <div className="flex flex-wrap items-center gap-2 mt-3">
               {detail.rating != null && detail.rating > 0 && (
                 <div className="flex items-center gap-1">
                   <Star size={12} className="text-yellow-400 fill-yellow-400" />
@@ -109,91 +155,111 @@ function VodInfoModal({
               {detail.genre && <span className="badge badge-purple">{detail.genre}</span>}
               {detail.language && <span className="badge badge-gray">{detail.language}</span>}
               {detail.duration && <span className="text-xs text-white/40">{detail.duration}</span>}
-            </div>
-
-            {detail.director && (
-              <p className="text-xs text-white/50 mt-2">
-                <span className="text-white/30">Director:</span> {detail.director}
-              </p>
-            )}
-            {detail.cast && (
-              <p className="text-xs text-white/50 mt-1 line-clamp-2">
-                <span className="text-white/30">Cast:</span> {detail.cast}
-              </p>
-            )}
-            {detail.plot && (
-              <p className="text-sm text-white/60 mt-3 leading-relaxed">{detail.plot}</p>
-            )}
-
-            {technicalFacts.length > 0 && (
-              <div className="mt-4 grid grid-cols-2 gap-2">
-                {technicalFacts.map((fact) => (
-                  <div key={fact.label} className="rounded-2xl border border-white/8 bg-white/[0.03] px-3 py-2">
-                    <p className="text-[0.68rem] font-semibold uppercase tracking-[0.18em] text-white/35">
-                      {fact.label}
-                    </p>
-                    <p className="mt-1 text-sm text-white/80 break-words">{fact.value}</p>
-                  </div>
-                ))}
               </div>
-            )}
 
-            {imdbUrl && (
-              <a
-                href={imdbUrl}
-                target="_blank"
-                rel="noreferrer"
-                className="mt-4 inline-flex items-center gap-2 text-sm text-amber-300 hover:text-amber-200"
-              >
-                <ExternalLink size={14} />
-                Open IMDb entry
-              </a>
-            )}
+              {detail.director && (
+                <p className="text-xs text-white/50 mt-3">
+                  <span className="text-white/30">Director:</span> {detail.director}
+                </p>
+              )}
+              {detail.cast && (
+                <p className="text-xs text-white/50 mt-1 leading-relaxed">
+                  <span className="text-white/30">Cast:</span> {detail.cast}
+                </p>
+              )}
+              {detail.plot && (
+                <p className="text-sm text-white/60 mt-4 leading-relaxed">{detail.plot}</p>
+              )}
 
-            {watchError && (
-              <p className="text-xs text-red-400 mt-3">{watchError}</p>
-            )}
-
-            <div className="flex gap-3 mt-5">
-              <button
-                onClick={handleWatch}
-                disabled={watching}
-                className="flex items-center gap-2 px-4 py-2 rounded-lg btn-accent text-sm font-medium disabled:opacity-60"
-              >
-                {watching ? (
-                  <div className="w-3.5 h-3.5 border-2 border-white/40 border-t-white rounded-full animate-spin" />
-                ) : (
-                  <Play size={14} fill="white" />
+              <div className="mt-4 flex flex-wrap gap-3 text-sm">
+                {trailerUrl && (
+                  <a
+                    href={trailerUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex items-center gap-2 text-amber-300 hover:text-amber-200"
+                  >
+                    <ExternalLink size={14} />
+                    Watch trailer
+                  </a>
                 )}
-                {watching ? "Loading…" : "Watch"}
-              </button>
-
-              <div className="flex items-center gap-2">
-                <select
-                  value={language}
-                  onChange={(e) => setLanguage(e.target.value)}
-                  className="glass-input text-sm py-1.5"
-                >
-                  {LANGUAGES.filter(Boolean).map((l) => (
-                    <option key={l} value={l} className="bg-gray-900">{l}</option>
-                  ))}
-                </select>
-                <button
-                  onClick={handleDownload}
-                  disabled={downloading || downloaded}
-                  className="flex items-center gap-2 px-4 py-2 rounded-lg bg-white/10 hover:bg-white/15 text-white text-sm font-medium transition-colors disabled:opacity-50"
-                >
-                  <Download size={14} />
-                  {downloaded ? "Queued!" : downloading ? "..." : "Download"}
-                </button>
+                {imdbUrl && (
+                  <a
+                    href={imdbUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex items-center gap-2 text-amber-300 hover:text-amber-200"
+                  >
+                    <ExternalLink size={14} />
+                    Open IMDb entry
+                  </a>
+                )}
+                {tmdbUrl && (
+                  <a
+                    href={tmdbUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex items-center gap-2 text-amber-300 hover:text-amber-200"
+                  >
+                    <ExternalLink size={14} />
+                    Open TMDB entry
+                  </a>
+                )}
               </div>
-            </div>
 
-            <div className="mt-4 rounded-2xl border border-amber-400/15 bg-amber-400/5 px-3 py-2 text-xs leading-relaxed text-white/60">
-              The provider’s raw `get_vod_info` response also includes trailer, backdrop, release date, bitrate, resolution, and codec metadata.
-              The current backend does not expose those fields to the frontend yet.
+              {watchError && (
+                <p className="text-xs text-red-400 mt-3">{watchError}</p>
+              )}
+
+              <div className="flex gap-3 mt-5">
+                <button
+                  onClick={handleWatch}
+                  disabled={watching}
+                  className="flex items-center gap-2 px-4 py-2 rounded-lg btn-accent text-sm font-medium disabled:opacity-60"
+                >
+                  {watching ? (
+                    <div className="w-3.5 h-3.5 border-2 border-white/40 border-t-white rounded-full animate-spin" />
+                  ) : (
+                    <Play size={14} fill="white" />
+                  )}
+                  {watching ? "Loading…" : "Watch"}
+                </button>
+
+                <div className="flex items-center gap-2">
+                  <select
+                    value={language}
+                    onChange={(e) => setLanguage(e.target.value)}
+                    className="glass-input text-sm py-1.5"
+                  >
+                    {LANGUAGES.filter(Boolean).map((l) => (
+                      <option key={l} value={l} className="bg-gray-900">{l}</option>
+                    ))}
+                  </select>
+                  <button
+                    onClick={handleDownload}
+                    disabled={downloading || downloaded}
+                    className="flex items-center gap-2 px-4 py-2 rounded-lg bg-white/10 hover:bg-white/15 text-white text-sm font-medium transition-colors disabled:opacity-50"
+                  >
+                    <Download size={14} />
+                    {downloaded ? "Queued!" : downloading ? "..." : "Download"}
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
+
+          {technicalFacts.length > 0 && (
+            <div className="mt-6 grid grid-cols-2 gap-2 sm:grid-cols-3">
+              {technicalFacts.map((fact) => (
+                <div key={fact.label} className="rounded-2xl border border-white/8 bg-white/[0.03] px-3 py-2">
+                  <p className="text-[0.68rem] font-semibold uppercase tracking-[0.18em] text-white/35">
+                    {fact.label}
+                  </p>
+                  <p className="mt-1 text-sm text-white/80 break-words">{fact.value}</p>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       </div>
     </div>
@@ -219,11 +285,23 @@ export function Movies() {
     enabled: !!activePlaylistId,
   });
 
+  const movieCategories = [
+    {
+      id: -1,
+      playlist_id: activePlaylistId ?? 0,
+      type: "vod",
+      category_id: "__latest__",
+      name: "Latest 50",
+    },
+    ...categories,
+  ];
+
   const { data: streams = [], isLoading } = useQuery({
     queryKey: ["vod-streams", activePlaylistId, selectedCategory, search, language, genre, ratingMin, page],
     queryFn: () =>
       vodApi.streams(activePlaylistId!, {
-        category_id: selectedCategory || undefined,
+        category_id: selectedCategory === "__latest__" ? undefined : selectedCategory || undefined,
+        latest: selectedCategory === "__latest__",
         search: search || undefined,
         language: language || undefined,
         genre: genre || undefined,
@@ -270,7 +348,7 @@ export function Movies() {
 
   return (
     <div className="page-shell lg:grid lg:grid-cols-[260px_minmax(0,1fr)] lg:gap-6">
-      <CategorySidebar categories={categories} selected={selectedCategory} onSelect={(id) => { setSelectedCategory(id); setPage(0); }} />
+      <CategorySidebar categories={movieCategories} selected={selectedCategory} onSelect={(id) => { setSelectedCategory(id); setPage(0); }} />
 
       <div className="mt-5 flex min-w-0 flex-col lg:mt-0">
         <section className="glass-card page-hero">
@@ -294,7 +372,7 @@ export function Movies() {
           <div className="relative flex-1 min-w-48">
             <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-white/40" />
             <input
-              className="w-full glass-input pl-9 text-sm"
+              className="w-full glass-input pl-11 text-sm"
               placeholder="Search movies..."
               value={search}
               onChange={(e) => { setSearch(e.target.value); setPage(0); }}

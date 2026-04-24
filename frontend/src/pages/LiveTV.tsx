@@ -68,7 +68,7 @@ export function LiveTV() {
         <div className="relative mb-4 mt-5">
           <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-white/40" />
           <input
-            className="w-full glass-input pl-9"
+            className="w-full glass-input pl-11"
             placeholder="Search channels..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}

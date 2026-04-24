@@ -3,6 +3,7 @@ import {
   Download,
   Film,
   LayoutDashboard,
+  SlidersHorizontal,
   Tv,
   type LucideIcon,
 } from "lucide-react";
@@ -19,4 +20,5 @@ export const navItems: NavItem[] = [
   { to: "/movies", icon: Film, label: "Movies" },
   { to: "/series", icon: Clapperboard, label: "Series" },
   { to: "/downloads", icon: Download, label: "Downloads" },
+  { to: "/settings", icon: SlidersHorizontal, label: "Settings" },
 ];

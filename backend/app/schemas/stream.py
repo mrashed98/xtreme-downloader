@@ -40,6 +40,21 @@ class VodStreamResponse(BaseModel):
     language: str | None
 
 
+class VodStreamDetailResponse(VodStreamResponse):
+    tmdb_id: str | None = None
+    movie_image: str | None = None
+    backdrop: str | None = None
+    youtube_trailer: str | None = None
+    release_date: str | None = None
+    duration_secs: int | None = None
+    bitrate: int | None = None
+    video_codec: str | None = None
+    video_width: int | None = None
+    video_height: int | None = None
+    audio_codec: str | None = None
+    audio_channels: str | None = None
+
+
 class EpisodeResponse(BaseModel):
     model_config = {"from_attributes": True}
 

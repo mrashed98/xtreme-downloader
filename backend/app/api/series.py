@@ -97,7 +97,7 @@ async def get_series_categories(playlist_id: int, db: AsyncSession = Depends(get
         select(Category).where(
             Category.playlist_id == playlist_id,
             Category.type == CategoryType.series,
-        ).order_by(Category.name)
+        ).order_by(Category.name.desc())
     )
     return result.scalars().all()
 
@@ -106,6 +106,7 @@ async def get_series_categories(playlist_id: int, db: AsyncSession = Depends(get
 async def get_series(
     playlist_id: int,
     category_id: str | None = Query(None),
+    latest: bool = Query(False),
     language: str | None = Query(None),
     genre: str | None = Query(None),
     cast: str | None = Query(None),
@@ -121,7 +122,7 @@ async def get_series(
         id_list = [i.strip() for i in ids.split(",") if i.strip()]
         if id_list:
             query = query.where(Series.series_id.in_(id_list))
-    if category_id:
+    if category_id and not latest:
         query = query.where(Series.category_id == category_id)
     if language:
         query = query.where(Series.language.ilike(f"%{language}%"))
@@ -136,7 +137,10 @@ async def get_series(
         query = query.where(Series.rating >= rating_min)
     if search:
         query = query.where(Series.name.ilike(f"%{search}%"))
-    query = query.order_by(Series.name).offset(offset).limit(limit)
+    if latest:
+        query = query.order_by(Series.release_date.desc().nullslast(), Series.id.desc()).limit(min(limit, 50))
+    else:
+        query = query.order_by(Series.name).offset(offset).limit(limit)
     result = await db.execute(query)
     return result.scalars().all()
 

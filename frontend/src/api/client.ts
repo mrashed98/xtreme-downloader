@@ -44,6 +44,18 @@ export interface VodStream {
   category_id: string | null;
   added: string | null;
   imdb_id: string | null;
+  tmdb_id?: string | null;
+  movie_image?: string | null;
+  backdrop?: string | null;
+  youtube_trailer?: string | null;
+  release_date?: string | null;
+  duration_secs?: number | null;
+  bitrate?: number | null;
+  video_codec?: string | null;
+  video_width?: number | null;
+  video_height?: number | null;
+  audio_codec?: string | null;
+  audio_channels?: string | null;
   genre: string | null;
   rating: number | null;
   language: string | null;
@@ -159,6 +171,7 @@ export const vodApi = {
     playlistId: number,
     params?: {
       category_id?: string;
+      latest?: boolean;
       language?: string;
       genre?: string;
       cast?: string;
@@ -182,7 +195,7 @@ export const seriesApi = {
     api.get<Category[]>(`/series/${playlistId}/categories`).then((r) => r.data),
   list: (
     playlistId: number,
-    params?: { category_id?: string; language?: string; genre?: string; cast?: string; rating_min?: number; search?: string; limit?: number; offset?: number; ids?: string }
+    params?: { category_id?: string; latest?: boolean; language?: string; genre?: string; cast?: string; rating_min?: number; search?: string; limit?: number; offset?: number; ids?: string }
   ) => api.get<Series[]>(`/series/${playlistId}`, { params }).then((r) => r.data),
   genres: (playlistId: number) =>
     api.get<string[]>(`/series/${playlistId}/genres`).then((r) => r.data),

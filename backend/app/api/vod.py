@@ -9,7 +9,7 @@ from app.models.playlist import Playlist, Category, CategoryType
 from app.models.stream import VodStream
 from app.models.download import Download, DownloadStatus, ContentType
 from app.schemas.playlist import CategoryResponse
-from app.schemas.stream import VodStreamResponse, StreamUrlResponse
+from app.schemas.stream import VodStreamResponse, VodStreamDetailResponse, StreamUrlResponse
 from app.schemas.download import VodDownloadRequest, DownloadResponse
 from app.services.xtream import XtreamClient
 from app.services import downloader as dl_service
@@ -22,10 +22,43 @@ settings = get_settings()
 
 
 def _safe_filename(name: str) -> str:
-    invalid = r'\/:*?"<>|'
+    invalid = r'\\/:*?"<>|'
     for ch in invalid:
         name = name.replace(ch, "_")
     return name.strip()
+
+
+def _build_vod_detail_payload(stream: VodStream, raw_info: dict | None) -> dict:
+    base = VodStreamResponse.model_validate(stream).model_dump()
+    raw_info = raw_info or {}
+    info = raw_info.get("info") or {}
+    movie_data = raw_info.get("movie_data") or {}
+    video = info.get("video") or {}
+    audio = info.get("audio") or {}
+
+    return {
+        **base,
+        "icon": info.get("movie_image") or base.get("icon"),
+        "container_extension": movie_data.get("container_extension") or base.get("container_extension"),
+        "genre": info.get("genre") or base.get("genre"),
+        "cast": info.get("cast") or base.get("cast"),
+        "director": info.get("director") or base.get("director"),
+        "rating": info.get("rating") or base.get("rating"),
+        "plot": info.get("plot") or base.get("plot"),
+        "duration": info.get("duration") or base.get("duration"),
+        "tmdb_id": info.get("tmdb_id"),
+        "movie_image": info.get("movie_image"),
+        "backdrop": info.get("backdrop"),
+        "youtube_trailer": info.get("youtube_trailer"),
+        "release_date": info.get("releasedate"),
+        "duration_secs": info.get("duration_secs"),
+        "bitrate": info.get("bitrate"),
+        "video_codec": video.get("codec_name"),
+        "video_width": video.get("width"),
+        "video_height": video.get("height"),
+        "audio_codec": audio.get("codec_name"),
+        "audio_channels": audio.get("channel_layout"),
+    }
 
 
 @router.get("/{playlist_id}/categories", response_model=list[CategoryResponse])
@@ -34,7 +67,7 @@ async def get_vod_categories(playlist_id: int, db: AsyncSession = Depends(get_db
         select(Category).where(
             Category.playlist_id == playlist_id,
             Category.type == CategoryType.vod,
-        ).order_by(Category.name)
+        ).order_by(Category.name.desc())
     )
     return result.scalars().all()
 
@@ -43,6 +76,7 @@ async def get_vod_categories(playlist_id: int, db: AsyncSession = Depends(get_db
 async def get_vod_streams(
     playlist_id: int,
     category_id: str | None = Query(None),
+    latest: bool = Query(False),
     language: str | None = Query(None),
     genre: str | None = Query(None),
     cast: str | None = Query(None),
@@ -53,7 +87,7 @@ async def get_vod_streams(
     db: AsyncSession = Depends(get_db),
 ):
     query = select(VodStream).where(VodStream.playlist_id == playlist_id)
-    if category_id:
+    if category_id and not latest:
         query = query.where(VodStream.category_id == category_id)
     if language:
         query = query.where(VodStream.language.ilike(f"%{language}%"))
@@ -65,17 +99,25 @@ async def get_vod_streams(
         query = query.where(VodStream.rating >= rating_min)
     if search:
         query = query.where(VodStream.name.ilike(f"%{search}%"))
-    query = query.order_by(VodStream.name).offset(offset).limit(limit)
+    if latest:
+        query = query.order_by(VodStream.added.desc().nullslast(), VodStream.id.desc()).limit(min(limit, 50))
+    else:
+        query = query.order_by(VodStream.name).offset(offset).limit(limit)
     result = await db.execute(query)
     return result.scalars().all()
 
 
-@router.get("/{playlist_id}/streams/{stream_id}", response_model=VodStreamResponse)
+@router.get("/{playlist_id}/streams/{stream_id}", response_model=VodStreamDetailResponse)
 async def get_vod_stream(
     playlist_id: int,
     stream_id: str,
     db: AsyncSession = Depends(get_db),
 ):
+    result = await db.execute(select(Playlist).where(Playlist.id == playlist_id))
+    playlist = result.scalar_one_or_none()
+    if not playlist:
+        raise HTTPException(404, "Playlist not found")
+
     result = await db.execute(
         select(VodStream).where(
             VodStream.playlist_id == playlist_id,
@@ -85,7 +127,14 @@ async def get_vod_stream(
     stream = result.scalars().first()
     if not stream:
         raise HTTPException(404, "Stream not found")
-    return stream
+
+    client = XtreamClient(playlist.base_url, playlist.username, playlist.password)
+    try:
+        raw_info = await client.get_vod_info(stream_id)
+    finally:
+        await client.close()
+
+    return _build_vod_detail_payload(stream, raw_info)
 
 
 @router.get("/{playlist_id}/streams/{stream_id}/watch", response_model=StreamUrlResponse)
@@ -109,7 +158,6 @@ async def watch_vod(
     ext = stream.container_extension if stream else "mp4"
 
     client = XtreamClient(playlist.base_url, playlist.username, playlist.password)
-    # Use .m3u8 so the player always uses HLS.js (avoids browser mp4 playback issues)
     url = client.build_vod_url(stream_id, "m3u8")
     return StreamUrlResponse(url=url, stream_type="hls")
 
