@@ -45,16 +45,27 @@ export function LiveTV() {
   }
 
   return (
-    <div className="flex h-full gap-4 p-4">
+    <div className="page-shell lg:grid lg:grid-cols-[260px_minmax(0,1fr)] lg:gap-6">
       <CategorySidebar
         categories={categories}
         selected={selectedCategory}
         onSelect={setSelectedCategory}
       />
 
-      <div className="flex-1 flex flex-col min-w-0">
-        {/* Search */}
-        <div className="relative mb-4">
+      <div className="mt-5 flex min-w-0 flex-col lg:mt-0">
+        <section className="glass-card page-hero">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+            <div>
+              <p className="page-hero__eyebrow">Live TV</p>
+              <h1 className="page-hero__title">Channel surfing, streamlined for every screen.</h1>
+              <p className="page-hero__body">
+                Browse synced channels fast, then jump straight into playback with a touch-friendly layout on mobile and a denser grid on desktop.
+              </p>
+            </div>
+          </div>
+        </section>
+
+        <div className="relative mb-4 mt-5">
           <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-white/40" />
           <input
             className="w-full glass-input pl-9"
@@ -64,42 +75,41 @@ export function LiveTV() {
           />
         </div>
 
-        {/* Channel grid */}
         {isLoading ? (
-          <div className="flex items-center justify-center flex-1">
-            <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-purple-500" />
+          <div className="flex flex-1 items-center justify-center">
+            <div className="h-8 w-8 animate-spin rounded-full border-t-2 border-purple-500" />
           </div>
         ) : streams.length === 0 ? (
-          <div className="flex items-center justify-center flex-1 text-white/30">
+          <div className="glass-card flex flex-1 items-center justify-center p-8 text-white/30">
             <div className="text-center">
               <Tv size={40} className="mx-auto mb-2 opacity-40" />
               <p>No channels found</p>
             </div>
           </div>
         ) : (
-          <div className="overflow-y-auto flex-1">
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3">
+          <div className="flex-1 overflow-y-auto">
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-5 2xl:grid-cols-6">
               {streams.map((stream) => (
                 <button
                   key={stream.stream_id}
                   onClick={() => handlePlay(stream.stream_id, stream.name)}
-                  className="glass-card p-3 flex flex-col items-center gap-2 hover:scale-105 transition-all duration-200 hover:shadow-lg hover:shadow-purple-900/20 group"
+                  className="glass-card group flex flex-col items-center gap-3 p-4 text-center transition-all duration-300 hover:-translate-y-1"
                 >
                   {stream.icon ? (
                     <img
                       src={stream.icon}
                       alt={stream.name}
-                      className="w-12 h-12 object-contain rounded-lg"
+                      className="h-14 w-14 rounded-2xl object-contain"
                       onError={(e) => {
                         (e.target as HTMLImageElement).style.display = "none";
                       }}
                     />
                   ) : (
-                    <div className="w-12 h-12 rounded-lg bg-white/5 flex items-center justify-center">
+                    <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-white/5">
                       <Tv size={20} className="text-white/30" />
                     </div>
                   )}
-                  <span className="text-xs text-white/80 text-center line-clamp-2 leading-tight group-hover:text-white transition-colors">
+                  <span className="line-clamp-2 text-sm leading-tight text-white/80 transition-colors group-hover:text-white">
                     {stream.name}
                   </span>
                 </button>

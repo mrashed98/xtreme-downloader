@@ -42,6 +42,8 @@ export interface VodStream {
   name: string;
   icon: string | null;
   category_id: string | null;
+  added: string | null;
+  imdb_id: string | null;
   genre: string | null;
   rating: number | null;
   language: string | null;

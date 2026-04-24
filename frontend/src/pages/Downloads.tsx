@@ -196,7 +196,7 @@ function DownloadRow({
   const canRetry = dl.status === "failed" || dl.status === "cancelled";
 
   return (
-    <div className="glass-card p-4 space-y-2 animate-slide-up">
+    <div className="glass-card animate-slide-up space-y-2 p-4">
       <div className="flex items-start justify-between gap-3">
         <div className="flex-1 min-w-0">
           <p className="text-sm font-medium text-white/90 truncate">{dl.title}</p>
@@ -395,15 +395,28 @@ export function Downloads() {
   };
 
   return (
-    <div className="p-6 space-y-5">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-white">Downloads</h1>
-          <p className="text-white/50 text-sm mt-0.5">{downloads.length} items</p>
+    <div className="page-shell space-y-5">
+      <section className="glass-card page-hero">
+        <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
+          <div>
+            <p className="page-hero__eyebrow">Downloads</p>
+            <h1 className="page-hero__title">Queue, watch progress, and recover failures gracefully.</h1>
+            <p className="page-hero__body">
+              The downloads area is now more readable on wide screens and easier to operate one-handed on mobile.
+            </p>
+          </div>
+          <div className="page-actions">
+            <span className="rounded-full border border-white/10 px-3 py-2 text-sm text-white/55">
+              {downloads.length} items
+            </span>
+          </div>
         </div>
+      </section>
+
+      <div className="flex items-center justify-between">
         <button
           onClick={() => setShowSettings((v) => !v)}
-          className={`p-2 rounded-lg transition-colors ${
+          className={`rounded-2xl border border-white/10 p-2 transition-colors ${
             showSettings
               ? "bg-purple-500/20 text-purple-400"
               : "hover:bg-white/10 text-white/40 hover:text-white"
@@ -416,16 +429,14 @@ export function Downloads() {
         </button>
       </div>
 
-      {/* Settings panel */}
       {showSettings && <SettingsPanel onClose={() => setShowSettings(false)} />}
 
-      {/* Tabs */}
-      <div className="flex gap-1 glass-card p-1 rounded-xl w-fit">
+      <div className="glass-card flex w-fit gap-1 rounded-[1.4rem] p-1">
         {TABS.map((t) => (
           <button
             key={t}
             onClick={() => setTab(t)}
-            className={`px-4 py-1.5 rounded-lg text-sm font-medium capitalize transition-colors ${
+            className={`rounded-xl px-4 py-2 text-sm font-medium capitalize transition-colors ${
               tab === t ? "btn-accent" : "text-white/50 hover:text-white"
             }`}
           >
@@ -434,7 +445,6 @@ export function Downloads() {
         ))}
       </div>
 
-      {/* Downloads list */}
       {downloads.length === 0 ? (
         <GlassCard className="p-12">
           <div className="text-center text-white/30">
@@ -443,7 +453,7 @@ export function Downloads() {
           </div>
         </GlassCard>
       ) : (
-        <div className="space-y-3 max-h-[calc(100vh-260px)] overflow-y-auto pr-1">
+        <div className="max-h-[calc(100vh-22rem)] space-y-3 overflow-y-auto pr-1 lg:max-h-[calc(100vh-20rem)]">
           {downloads.map((dl) => (
             <DownloadRow
               key={dl.id}

@@ -16,22 +16,35 @@ export function CategorySidebar({ categories, selected, onSelect }: CategorySide
     : categories;
 
   return (
-    <div className="w-48 flex-shrink-0 flex flex-col gap-2 overflow-hidden pr-2">
+    <section className="glass-card flex flex-col gap-3 overflow-hidden p-3 lg:h-full lg:min-h-0 lg:w-64 lg:p-4">
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <p className="text-[0.65rem] font-semibold uppercase tracking-[0.3em] text-white/35">
+            Categories
+          </p>
+          <p className="mt-1 text-sm text-white/50">Refine the catalog quickly.</p>
+        </div>
+        <span className="rounded-full border border-white/10 px-2.5 py-1 text-xs text-white/45">
+          {filtered.length}
+        </span>
+      </div>
+
       <div className="relative flex-shrink-0">
-        <Search size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-white/30" />
+        <Search size={12} className="absolute left-3 top-1/2 -translate-y-1/2 text-white/30" />
         <input
-          className="w-full glass-input pl-8 py-1.5 text-xs"
-          placeholder="Search categories..."
+          className="w-full glass-input pl-9 py-2 text-sm"
+          placeholder="Search categories"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
         />
       </div>
-      <div className="space-y-1 overflow-y-auto flex-1">
+
+      <div className="flex gap-2 overflow-x-auto pb-1 lg:block lg:flex-1 lg:space-y-1 lg:overflow-x-hidden lg:overflow-y-auto">
         <button
-          className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-colors ${
+          className={`shrink-0 rounded-full px-3 py-2 text-sm transition-colors lg:w-full lg:rounded-2xl lg:text-left ${
             selected === null
-              ? "bg-gradient-accent text-white font-medium"
-              : "text-white/60 hover:text-white hover:bg-white/5"
+              ? "bg-white font-medium text-slate-900"
+              : "border border-white/10 text-white/60 hover:bg-white/5 hover:text-white"
           }`}
           onClick={() => onSelect(null)}
         >
@@ -40,10 +53,10 @@ export function CategorySidebar({ categories, selected, onSelect }: CategorySide
         {filtered.map((cat) => (
           <button
             key={cat.category_id}
-            className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-colors ${
+            className={`shrink-0 rounded-full px-3 py-2 text-sm transition-colors lg:w-full lg:rounded-2xl lg:text-left ${
               selected === cat.category_id
-                ? "bg-gradient-accent text-white font-medium"
-                : "text-white/60 hover:text-white hover:bg-white/5"
+                ? "bg-white font-medium text-slate-900"
+                : "border border-white/10 text-white/60 hover:bg-white/5 hover:text-white"
             }`}
             onClick={() => onSelect(cat.category_id)}
           >
@@ -51,9 +64,9 @@ export function CategorySidebar({ categories, selected, onSelect }: CategorySide
           </button>
         ))}
         {filtered.length === 0 && search && (
-          <p className="text-xs text-white/30 px-3 py-2">No matches</p>
+          <p className="px-3 py-2 text-xs text-white/30">No matches</p>
         )}
       </div>
-    </div>
+    </section>
   );
 }

@@ -1,18 +1,8 @@
 import { useEffect } from "react";
 import { NavLink, useLocation } from "react-router-dom";
-import {
-  LayoutDashboard, Tv, Film, Clapperboard, Download,
-  PanelLeftClose, PanelLeftOpen, X,
-} from "lucide-react";
+import { PanelLeftClose, PanelLeftOpen, X } from "lucide-react";
 import { useAppStore } from "../../store";
-
-const navItems = [
-  { to: "/", icon: LayoutDashboard, label: "Dashboard" },
-  { to: "/live", icon: Tv, label: "Live TV" },
-  { to: "/movies", icon: Film, label: "Movies" },
-  { to: "/series", icon: Clapperboard, label: "Series" },
-  { to: "/downloads", icon: Download, label: "Downloads" },
-];
+import { navItems } from "./navItems";
 
 interface NavListProps {
   expanded: boolean;
@@ -30,9 +20,9 @@ function NavList({ expanded, activeDownloadCount, onNavigate }: NavListProps) {
           end={to === "/"}
           onClick={onNavigate}
           className={({ isActive }) =>
-            `flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-200 group ${
+            `flex items-center gap-3 rounded-2xl px-3 py-3 transition-all duration-200 group ${
               isActive
-                ? "bg-gradient-accent text-white shadow-lg"
+                ? "bg-white text-slate-900 shadow-[0_14px_34px_rgba(255,255,255,0.12)]"
                 : "text-white/60 hover:text-white hover:bg-white/5"
             }`
           }
@@ -43,14 +33,14 @@ function NavList({ expanded, activeDownloadCount, onNavigate }: NavListProps) {
             <Icon size={18} />
             {label === "Downloads" && activeDownloadCount > 0 && (
               <span
-                className="absolute -top-1.5 -right-1.5 w-4 h-4 bg-pink-500 rounded-full text-xs flex items-center justify-center text-white font-bold"
+                className="absolute -right-1.5 -top-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-amber-500 px-1 text-[0.65rem] font-bold text-slate-950"
                 aria-label={`${activeDownloadCount} active downloads`}
               >
                 {activeDownloadCount > 9 ? "9+" : activeDownloadCount}
               </span>
             )}
           </div>
-          {expanded && <span className="text-sm font-medium">{label}</span>}
+          {expanded && <span className="text-sm font-semibold">{label}</span>}
         </NavLink>
       ))}
     </nav>
@@ -65,13 +55,10 @@ export function Sidebar() {
   const setSidebarMobileOpen = useAppStore((s) => s.setSidebarMobileOpen);
   const location = useLocation();
 
-  // Close mobile drawer on route change as safety net.
   useEffect(() => {
     if (sidebarMobileOpen) setSidebarMobileOpen(false);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [location.pathname]);
+  }, [location.pathname, setSidebarMobileOpen, sidebarMobileOpen]);
 
-  // Close mobile drawer on Escape.
   useEffect(() => {
     if (!sidebarMobileOpen) return;
     const onKey = (e: KeyboardEvent) => {
@@ -85,33 +72,35 @@ export function Sidebar() {
 
   return (
     <>
-      {/* Desktop aside — lg+ only, always in flex flow */}
       <aside
-        className={`hidden lg:flex flex-shrink-0 glass-card rounded-none border-r border-white/10 flex-col py-6 transition-[width] duration-200 ${
-          desktopExpanded ? "w-56" : "w-16"
+        className={`app-sidebar hidden flex-shrink-0 flex-col py-6 transition-[width] duration-300 lg:flex ${
+          desktopExpanded ? "w-64" : "w-20"
         }`}
       >
-        {/* Logo */}
         {desktopExpanded ? (
-          <div className="px-4 mb-8">
-            <h1 className="text-lg font-bold gradient-text">Xtreme DL</h1>
-            <p className="text-xs text-white/40 mt-0.5">IPTV Manager</p>
+          <div className="mb-8 px-4">
+            <p className="text-[0.65rem] font-semibold uppercase tracking-[0.34em] text-white/35">
+              Streaming Suite
+            </p>
+            <h1 className="mt-2 text-xl font-semibold text-white">Xtreme DL</h1>
+            <p className="mt-1 text-sm leading-relaxed text-white/45">
+              Sync playlists, explore channels, and control downloads from one elegant workspace.
+            </p>
           </div>
         ) : (
-          <div className="px-2 mb-8 flex justify-center">
-            <div className="w-8 h-8 rounded-lg bg-gradient-accent flex items-center justify-center">
-              <span className="text-white font-bold text-sm">X</span>
+          <div className="mb-8 flex justify-center px-2">
+            <div className="flex h-10 w-10 items-center justify-center rounded-2xl border border-white/10 bg-white/10 shadow-[0_12px_40px_rgba(0,0,0,0.28)]">
+              <span className="text-sm font-semibold text-white">X</span>
             </div>
           </div>
         )}
 
         <NavList expanded={desktopExpanded} activeDownloadCount={activeDownloadCount} />
 
-        {/* Collapse toggle */}
-        <div className="px-2 mt-2">
+        <div className="mt-2 px-2">
           <button
             onClick={toggleSidebar}
-            className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-white/40 hover:text-white hover:bg-white/5 transition-colors"
+            className="flex w-full items-center justify-center gap-2 rounded-2xl px-3 py-2 text-white/40 transition-colors hover:bg-white/5 hover:text-white"
             aria-label={desktopExpanded ? "Collapse sidebar" : "Expand sidebar"}
             title={desktopExpanded ? "Collapse" : "Expand"}
           >
@@ -120,30 +109,33 @@ export function Sidebar() {
         </div>
       </aside>
 
-      {/* Mobile drawer — overlay, below lg */}
       {sidebarMobileOpen && (
         <div
-          className="lg:hidden fixed inset-0 z-40 bg-black/60 backdrop-blur-sm animate-fade-in"
+          className="fixed inset-0 z-40 bg-black/60 backdrop-blur-sm animate-fade-in lg:hidden"
           onClick={() => setSidebarMobileOpen(false)}
           aria-hidden="true"
         />
       )}
+
       <aside
-        className={`lg:hidden fixed left-0 top-0 h-full w-64 z-50 glass-card rounded-none border-r border-white/10 flex flex-col py-6 transition-transform duration-300 ${
+        className={`app-sidebar fixed left-0 top-0 z-50 flex h-full w-[88vw] max-w-sm flex-col py-6 transition-transform duration-300 lg:hidden ${
           sidebarMobileOpen ? "translate-x-0" : "-translate-x-full"
         }`}
         role="dialog"
         aria-modal="true"
         aria-label="Navigation"
       >
-        <div className="px-4 mb-6 flex items-center justify-between">
+        <div className="mb-6 flex items-center justify-between px-4">
           <div>
-            <h1 className="text-lg font-bold gradient-text">Xtreme DL</h1>
-            <p className="text-xs text-white/40 mt-0.5">IPTV Manager</p>
+            <p className="text-[0.65rem] font-semibold uppercase tracking-[0.34em] text-white/35">
+              Mobile Menu
+            </p>
+            <h1 className="mt-2 text-xl font-semibold text-white">Xtreme DL</h1>
+            <p className="mt-1 text-sm text-white/45">Quick access to your media control hub.</p>
           </div>
           <button
             onClick={() => setSidebarMobileOpen(false)}
-            className="p-1.5 rounded-lg text-white/50 hover:text-white hover:bg-white/10 transition-colors"
+            className="rounded-2xl p-2 text-white/50 transition-colors hover:bg-white/10 hover:text-white"
             aria-label="Close navigation"
           >
             <X size={18} />

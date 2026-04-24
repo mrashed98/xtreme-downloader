@@ -32,31 +32,32 @@ export function ContentCard({
 }: ContentCardProps) {
   return (
     <div
-      className="glass-card overflow-hidden cursor-pointer group transition-all duration-200 hover:scale-[1.02] hover:shadow-xl hover:shadow-purple-900/20 animate-slide-up"
+      className="glass-card group cursor-pointer overflow-hidden transition-all duration-300 hover:-translate-y-1 hover:shadow-[0_32px_60px_rgba(5,9,16,0.35)] animate-slide-up"
       onClick={onClick}
     >
-      {/* Thumbnail */}
-      <div className="relative aspect-[2/3] bg-white/5 overflow-hidden">
+      <div className="relative aspect-[0.75] overflow-hidden bg-white/5">
         {image ? (
           <img
             src={image}
             alt={title}
-            className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+            className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
             onError={(e) => {
               (e.target as HTMLImageElement).style.display = "none";
             }}
           />
         ) : (
-          <div className="w-full h-full flex items-center justify-center bg-gradient-card">
+          <div className="flex h-full w-full items-center justify-center bg-gradient-card">
             <Play size={32} className="text-white/30" />
           </div>
         )}
 
-        {/* Overlay on hover */}
-        <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex items-center justify-center gap-3">
+        <div className="absolute inset-0 bg-gradient-to-t from-[rgba(7,11,19,0.94)] via-[rgba(7,11,19,0.12)] to-transparent" />
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(255,255,255,0.16),transparent_42%)] opacity-80" />
+
+        <div className="absolute inset-0 flex items-center justify-center gap-3 bg-[rgba(8,13,22,0.35)] opacity-0 transition-opacity duration-300 group-hover:opacity-100">
           {onPlay && (
             <button
-              className="p-3 rounded-full btn-accent shadow-lg"
+              className="rounded-full p-3 shadow-lg btn-accent"
               onClick={(e) => { e.stopPropagation(); onPlay(); }}
             >
               <Play size={16} fill="white" />
@@ -64,7 +65,7 @@ export function ContentCard({
           )}
           {onDownload && (
             <button
-              className="p-3 rounded-full bg-white/20 hover:bg-white/30 text-white transition-colors"
+              className="rounded-full bg-white/20 p-3 text-white transition-colors hover:bg-white/30"
               onClick={(e) => { e.stopPropagation(); onDownload(); }}
             >
               <Download size={16} />
@@ -72,13 +73,12 @@ export function ContentCard({
           )}
         </div>
 
-        {/* Favorite button — always visible in top-left when onFavorite is provided */}
         {onFavorite && (
           <button
-            className={`absolute top-2 left-2 p-1.5 rounded-full transition-colors z-10 ${
+            className={`absolute left-3 top-3 z-10 rounded-full p-2 transition-colors ${
               isFavorited
-                ? "bg-pink-500/80 text-white"
-                : "bg-black/50 text-white/50 opacity-0 group-hover:opacity-100 hover:text-pink-400"
+                ? "bg-rose-500/80 text-white"
+                : "bg-black/45 text-white/55 opacity-0 group-hover:opacity-100 hover:text-rose-300"
             }`}
             onClick={(e) => { e.stopPropagation(); onFavorite(); }}
             title={isFavorited ? "Remove from favorites" : "Add to favorites"}
@@ -87,29 +87,29 @@ export function ContentCard({
           </button>
         )}
 
-        {/* Badge */}
         {badge && (
-          <div className={`absolute top-2 ${onFavorite ? "left-10" : "left-2"}`}>
+          <div className={`absolute top-3 ${onFavorite ? "left-12" : "left-3"}`}>
             <span className={`badge badge-${badgeColor}`}>{badge}</span>
           </div>
         )}
 
-        {/* Rating */}
         {rating != null && rating > 0 && (
-          <div className="absolute top-2 right-2 flex items-center gap-1 bg-black/60 rounded-full px-2 py-0.5">
-            <Star size={10} className="text-yellow-400 fill-yellow-400" />
-            <span className="text-xs text-white font-medium">{rating.toFixed(1)}</span>
+          <div className="absolute right-3 top-3 flex items-center gap-1 rounded-full bg-black/60 px-2 py-1 backdrop-blur-sm">
+            <Star size={10} className="fill-yellow-400 text-yellow-400" />
+            <span className="text-xs font-medium text-white">{rating.toFixed(1)}</span>
           </div>
         )}
+
+        <div className="absolute inset-x-0 bottom-0 p-3">
+          <div className="rounded-[1.35rem] border border-white/10 bg-[rgba(5,10,18,0.72)] px-3 py-2 backdrop-blur-md">
+            <h3 className="line-clamp-2 text-sm font-semibold text-white">{title}</h3>
+            {subtitle && <p className="mt-1 line-clamp-1 text-xs text-white/58">{subtitle}</p>}
+          </div>
+        </div>
       </div>
 
-      {/* Info */}
-      <div className="p-3">
-        <h3 className="text-sm font-medium text-white/90 line-clamp-2 leading-snug">{title}</h3>
-        {subtitle && (
-          <p className="text-xs text-white/50 mt-1 line-clamp-1">{subtitle}</p>
-        )}
-        {footer && <div className="mt-2">{footer}</div>}
+      <div className="p-3 pt-2">
+        {footer && <div>{footer}</div>}
       </div>
     </div>
   );

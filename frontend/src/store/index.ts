@@ -14,6 +14,7 @@ export interface PlayerItem {
   url: string;
   title: string;
   type: "hls" | "mp4";
+  fallbackUrl?: string;
 }
 
 interface PlayerState {

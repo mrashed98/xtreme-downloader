@@ -16,13 +16,13 @@ interface StatCardProps {
 
 function StatCard({ label, value, icon, color }: StatCardProps) {
   return (
-    <GlassCard className="p-5">
+    <GlassCard className="p-5 sm:p-6">
       <div className="flex items-center justify-between">
         <div>
-          <p className="text-xs font-semibold text-white/40 uppercase tracking-wider">{label}</p>
-          <p className="text-2xl font-bold text-white mt-1">{value}</p>
+          <p className="text-xs font-semibold uppercase tracking-[0.24em] text-white/40">{label}</p>
+          <p className="mt-2 text-2xl font-bold text-white">{value}</p>
         </div>
-        <div className={`p-3 rounded-xl ${color}`}>{icon}</div>
+        <div className={`rounded-2xl p-3 ${color}`}>{icon}</div>
       </div>
     </GlassCard>
   );
@@ -184,32 +184,48 @@ export function Dashboard() {
   };
 
   return (
-    <div className="p-6 space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-white">Dashboard</h1>
-          <p className="text-white/50 text-sm mt-0.5">Manage your IPTV playlists and downloads</p>
+    <div className="page-shell space-y-6">
+      <section className="glass-card page-hero overflow-hidden">
+        <div className="flex flex-col gap-5 xl:flex-row xl:items-end xl:justify-between">
+          <div>
+            <p className="page-hero__eyebrow">Overview</p>
+            <h1 className="page-hero__title">Your IPTV command deck, rebuilt for web and mobile.</h1>
+            <p className="page-hero__body">
+              Xtreme Downloader is a media control frontend for syncing IPTV playlists, exploring live channels and on-demand catalogs, and managing downloads in one polished workspace.
+            </p>
+          </div>
+          <div className="page-actions">
+            <span className="rounded-full border border-white/10 px-3 py-2 text-sm text-white/55">
+              {playlists.length} playlists connected
+            </span>
+            <button
+              onClick={() => { setEditPlaylist(null); setShowModal(true); }}
+              className="flex items-center gap-2 rounded-2xl px-4 py-3 text-sm font-semibold btn-accent"
+            >
+              <Plus size={16} />
+              Add Playlist
+            </button>
+          </div>
         </div>
-        <button
-          onClick={() => { setEditPlaylist(null); setShowModal(true); }}
-          className="flex items-center gap-2 px-4 py-2 rounded-lg btn-accent text-sm font-medium"
-        >
-          <Plus size={16} />
-          Add Playlist
-        </button>
-      </div>
+      </section>
 
-      {/* Stats */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 gap-4 xl:grid-cols-4">
         <StatCard label="Playlists" value={playlists.length} icon={<Tv size={20} className="text-purple-300" />} color="bg-purple-500/20" />
         <StatCard label="Downloading" value={activeCount} icon={<Download size={20} className="text-blue-300" />} color="bg-blue-500/20" />
         <StatCard label="Completed" value={completedCount} icon={<Film size={20} className="text-green-300" />} color="bg-green-500/20" />
         <StatCard label="Failed" value={failedCount} icon={<Clapperboard size={20} className="text-red-300" />} color="bg-red-500/20" />
       </div>
 
-      {/* Playlists */}
-      <GlassCard className="p-5">
-        <h2 className="text-base font-semibold text-white mb-4">Playlists</h2>
+      <GlassCard className="p-5 sm:p-6">
+        <div className="mb-4 flex items-center justify-between gap-4">
+          <div>
+            <p className="page-hero__eyebrow">Playlists</p>
+            <h2 className="mt-2 text-xl font-semibold text-white">Sources and sync status</h2>
+          </div>
+          <span className="hidden rounded-full border border-white/10 px-3 py-2 text-sm text-white/50 sm:inline-flex">
+            Tap any row to make it active
+          </span>
+        </div>
         {playlists.length === 0 ? (
           <div className="text-center py-10">
             <Tv size={40} className="mx-auto text-white/20 mb-3" />
@@ -220,15 +236,15 @@ export function Dashboard() {
             {playlists.map((p) => (
               <div
                 key={p.id}
-                className={`flex items-center gap-4 p-4 rounded-xl transition-colors ${
-                  p.id === activePlaylistId ? "bg-purple-500/10 border border-purple-500/20" : "bg-white/3 hover:bg-white/5"
+                className={`flex flex-col gap-4 rounded-[1.5rem] border p-4 transition-colors sm:flex-row sm:items-center ${
+                  p.id === activePlaylistId ? "border-emerald-300/20 bg-emerald-300/8" : "border-white/6 bg-white/[0.025] hover:bg-white/[0.045]"
                 }`}
               >
                 <div
                   className="flex-1 cursor-pointer"
                   onClick={() => setActivePlaylistId(p.id)}
                 >
-                  <div className="flex items-center gap-2">
+                  <div className="flex flex-wrap items-center gap-2">
                     <div className={`w-2 h-2 rounded-full ${p.is_active ? "bg-green-400" : "bg-white/20"}`} />
                     <span className="font-medium text-white text-sm">{p.name}</span>
                     {p.id === activePlaylistId && (
@@ -245,7 +261,7 @@ export function Dashboard() {
                   )}
                 </div>
 
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 self-end sm:self-auto">
                   <button
                     onClick={() => handleSync(p.id)}
                     disabled={p.sync_status === "syncing"}

@@ -474,16 +474,32 @@ export function SeriesPage() {
   }
 
   return (
-    <div className="flex h-full gap-4 p-4">
+    <div className="page-shell lg:grid lg:grid-cols-[260px_minmax(0,1fr)] lg:gap-6">
       <CategorySidebar
         categories={categories}
         selected={selectedCategory}
         onSelect={(id) => { setSelectedCategory(id); setPage(0); }}
       />
 
-      <div className="flex-1 flex flex-col min-w-0">
-        {/* Filters */}
-        <div className="flex flex-wrap gap-2 mb-4">
+      <div className="mt-5 flex min-w-0 flex-col lg:mt-0">
+        <section className="glass-card page-hero">
+          <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
+            <div>
+              <p className="page-hero__eyebrow">Series</p>
+              <h1 className="page-hero__title">Track episodes with more signal and less clutter.</h1>
+              <p className="page-hero__body">
+                Follow seasons, favorite shows, and manage monitored episodes in a layout that stays usable on smaller screens without losing depth on desktop.
+              </p>
+            </div>
+            <div className="page-actions">
+              <span className="rounded-full border border-white/10 px-3 py-2 text-sm text-white/55">
+                {displayedSeries.length} results
+              </span>
+            </div>
+          </div>
+        </section>
+
+        <div className="mb-4 mt-5 flex flex-wrap gap-2">
           <div className="relative flex-1 min-w-48">
             <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-white/40" />
             <input

@@ -1,12 +1,19 @@
 import { useState, useMemo } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Search, Film, X, Play, Download, Star, Heart } from "lucide-react";
+import { Download, ExternalLink, Film, Heart, Play, Search, Star, X } from "lucide-react";
 import { vodApi, favoritesApi, type VodStream } from "../api/client";
 import { useAppStore } from "../store";
 import { CategorySidebar } from "../components/ContentGrid/CategorySidebar";
 import { ContentCard } from "../components/ContentGrid/ContentCard";
 
 const LANGUAGES = ["", "Arabic", "English", "Turkish", "French", "Spanish"];
+
+function formatAdded(value?: string | null) {
+  if (!value) return null;
+  const parsed = Number(value);
+  if (Number.isNaN(parsed)) return value;
+  return new Date(parsed * 1000).toLocaleDateString();
+}
 
 function VodInfoModal({
   stream,
@@ -17,20 +24,38 @@ function VodInfoModal({
   playlistId: number;
   onClose: () => void;
 }) {
-  const { openPlayer } = useAppStore();
+  const { openQueue } = useAppStore();
   const qc = useQueryClient();
   const [language, setLanguage] = useState("English");
   const [downloading, setDownloading] = useState(false);
   const [downloaded, setDownloaded] = useState(false);
   const [watching, setWatching] = useState(false);
   const [watchError, setWatchError] = useState<string | null>(null);
+  const { data: fullStream } = useQuery({
+    queryKey: ["vod-detail", playlistId, stream.stream_id],
+    queryFn: () => vodApi.get(playlistId, stream.stream_id),
+    initialData: stream,
+  });
+
+  const detail = fullStream ?? stream;
+  const imdbUrl = detail.imdb_id ? `https://www.imdb.com/title/${detail.imdb_id}` : null;
+  const technicalFacts = [
+    detail.duration ? { label: "Runtime", value: detail.duration } : null,
+    detail.language ? { label: "Language", value: detail.language } : null,
+    detail.container_extension ? { label: "Format", value: detail.container_extension.toUpperCase() } : null,
+    detail.imdb_id ? { label: "IMDb", value: detail.imdb_id } : null,
+    formatAdded(detail.added) ? { label: "Added", value: formatAdded(detail.added)! } : null,
+  ].filter(Boolean) as { label: string; value: string }[];
 
   const handleWatch = async () => {
     setWatching(true);
     setWatchError(null);
     try {
       const { url, stream_type } = await vodApi.watch(playlistId, stream.stream_id);
-      openPlayer(url, stream.name, stream_type === "hls" ? "hls" : "mp4");
+      const fallbackUrl = detail.container_extension && url.endsWith(".m3u8")
+        ? url.replace(/\.m3u8(?:\?.*)?$/, `.${detail.container_extension}`)
+        : undefined;
+      openQueue([{ url, title: stream.name, type: stream_type === "hls" ? "hls" : "mp4", fallbackUrl }], 0);
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : "Failed to load stream";
       setWatchError(msg);
@@ -53,48 +78,76 @@ function VodInfoModal({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-sm animate-fade-in">
       <div className="glass-card w-full max-w-2xl mx-4 p-6 animate-slide-up max-h-[90vh] overflow-y-auto">
-        <div className="flex gap-5">
-          {stream.icon && (
+        <div className="flex flex-col gap-5 sm:flex-row">
+          {detail.icon && (
             <img
-              src={stream.icon}
-              alt={stream.name}
-              className="w-32 h-48 object-cover rounded-xl flex-shrink-0"
+              src={detail.icon}
+              alt={detail.name}
+              className="h-48 w-32 rounded-xl object-cover flex-shrink-0"
               onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
             />
           )}
 
           <div className="flex-1 min-w-0">
             <div className="flex items-start justify-between gap-3">
-              <h2 className="text-xl font-bold text-white">{stream.name}</h2>
+              <div>
+                <p className="page-hero__eyebrow">VOD Details</p>
+                <h2 className="mt-2 text-xl font-bold text-white">{detail.name}</h2>
+              </div>
               <button onClick={onClose} className="text-white/50 hover:text-white flex-shrink-0">
                 <X size={20} />
               </button>
             </div>
 
             <div className="flex flex-wrap items-center gap-2 mt-2">
-              {stream.rating != null && stream.rating > 0 && (
+              {detail.rating != null && detail.rating > 0 && (
                 <div className="flex items-center gap-1">
                   <Star size={12} className="text-yellow-400 fill-yellow-400" />
-                  <span className="text-sm text-white/70">{stream.rating.toFixed(1)}</span>
+                  <span className="text-sm text-white/70">{detail.rating.toFixed(1)}</span>
                 </div>
               )}
-              {stream.genre && <span className="badge badge-purple">{stream.genre}</span>}
-              {stream.language && <span className="badge badge-gray">{stream.language}</span>}
-              {stream.duration && <span className="text-xs text-white/40">{stream.duration}</span>}
+              {detail.genre && <span className="badge badge-purple">{detail.genre}</span>}
+              {detail.language && <span className="badge badge-gray">{detail.language}</span>}
+              {detail.duration && <span className="text-xs text-white/40">{detail.duration}</span>}
             </div>
 
-            {stream.director && (
+            {detail.director && (
               <p className="text-xs text-white/50 mt-2">
-                <span className="text-white/30">Director:</span> {stream.director}
+                <span className="text-white/30">Director:</span> {detail.director}
               </p>
             )}
-            {stream.cast && (
+            {detail.cast && (
               <p className="text-xs text-white/50 mt-1 line-clamp-2">
-                <span className="text-white/30">Cast:</span> {stream.cast}
+                <span className="text-white/30">Cast:</span> {detail.cast}
               </p>
             )}
-            {stream.plot && (
-              <p className="text-sm text-white/60 mt-3 leading-relaxed line-clamp-4">{stream.plot}</p>
+            {detail.plot && (
+              <p className="text-sm text-white/60 mt-3 leading-relaxed">{detail.plot}</p>
+            )}
+
+            {technicalFacts.length > 0 && (
+              <div className="mt-4 grid grid-cols-2 gap-2">
+                {technicalFacts.map((fact) => (
+                  <div key={fact.label} className="rounded-2xl border border-white/8 bg-white/[0.03] px-3 py-2">
+                    <p className="text-[0.68rem] font-semibold uppercase tracking-[0.18em] text-white/35">
+                      {fact.label}
+                    </p>
+                    <p className="mt-1 text-sm text-white/80 break-words">{fact.value}</p>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {imdbUrl && (
+              <a
+                href={imdbUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="mt-4 inline-flex items-center gap-2 text-sm text-amber-300 hover:text-amber-200"
+              >
+                <ExternalLink size={14} />
+                Open IMDb entry
+              </a>
             )}
 
             {watchError && (
@@ -135,6 +188,11 @@ function VodInfoModal({
                 </button>
               </div>
             </div>
+
+            <div className="mt-4 rounded-2xl border border-amber-400/15 bg-amber-400/5 px-3 py-2 text-xs leading-relaxed text-white/60">
+              The provider’s raw `get_vod_info` response also includes trailer, backdrop, release date, bitrate, resolution, and codec metadata.
+              The current backend does not expose those fields to the frontend yet.
+            </div>
           </div>
         </div>
       </div>
@@ -143,7 +201,7 @@ function VodInfoModal({
 }
 
 export function Movies() {
-  const { activePlaylistId, openPlayer } = useAppStore();
+  const { activePlaylistId } = useAppStore();
   const qc = useQueryClient();
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [search, setSearch] = useState("");
@@ -211,12 +269,28 @@ export function Movies() {
   }
 
   return (
-    <div className="flex h-full gap-4 p-4">
+    <div className="page-shell lg:grid lg:grid-cols-[260px_minmax(0,1fr)] lg:gap-6">
       <CategorySidebar categories={categories} selected={selectedCategory} onSelect={(id) => { setSelectedCategory(id); setPage(0); }} />
 
-      <div className="flex-1 flex flex-col min-w-0">
-        {/* Filters */}
-        <div className="flex flex-wrap gap-2 mb-4">
+      <div className="mt-5 flex min-w-0 flex-col lg:mt-0">
+        <section className="glass-card page-hero">
+          <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
+            <div>
+              <p className="page-hero__eyebrow">Movies</p>
+              <h1 className="page-hero__title">Elegant browsing for long movie nights.</h1>
+              <p className="page-hero__body">
+                Search, preview, favorite, and queue downloads with a calmer layout that works equally well on desktop and in your hand.
+              </p>
+            </div>
+            <div className="page-actions">
+              <span className="rounded-full border border-white/10 px-3 py-2 text-sm text-white/55">
+                {displayedStreams.length} titles
+              </span>
+            </div>
+          </div>
+        </section>
+
+        <div className="mb-4 mt-5 flex flex-wrap gap-2">
           <div className="relative flex-1 min-w-48">
             <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-white/40" />
             <input
@@ -275,8 +349,8 @@ export function Movies() {
           </div>
         ) : (
           <>
-            <div className="overflow-y-auto flex-1">
-              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3">
+            <div className="flex-1 overflow-y-auto">
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-5 2xl:grid-cols-6">
                 {displayedStreams.map((stream) => (
                   <ContentCard
                     key={stream.stream_id}
@@ -291,7 +365,11 @@ export function Movies() {
                     onPlay={async () => {
                       try {
                         const { url, stream_type } = await vodApi.watch(activePlaylistId, stream.stream_id);
-                        openPlayer(url, stream.name, stream_type === "hls" ? "hls" : "mp4");
+                        const fallbackUrl = stream.container_extension && url.endsWith(".m3u8")
+                          ? url.replace(/\.m3u8(?:\?.*)?$/, `.${stream.container_extension}`)
+                          : undefined;
+                        const store = useAppStore.getState();
+                        store.openQueue([{ url, title: stream.name, type: stream_type === "hls" ? "hls" : "mp4", fallbackUrl }], 0);
                       } catch {
                         setSelectedStream(stream);
                       }
@@ -299,7 +377,7 @@ export function Movies() {
                   />
                 ))}
                 {displayedStreams.length === 0 && (
-                  <div className="col-span-full flex items-center justify-center py-20 text-white/30">
+                  <div className="glass-card col-span-full flex items-center justify-center py-20 text-white/30">
                     <div className="text-center">
                       <Film size={40} className="mx-auto mb-2 opacity-40" />
                       <p>{favoritesOnly ? "No favorites yet" : "No movies found"}</p>
@@ -315,7 +393,7 @@ export function Movies() {
                 <button
                   disabled={page === 0}
                   onClick={() => setPage((p) => p - 1)}
-                  className="px-4 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-sm text-white/70 disabled:opacity-30 transition-colors"
+                  className="rounded-2xl border border-white/10 bg-white/5 px-4 py-2 text-sm text-white/70 transition-colors hover:bg-white/10 disabled:opacity-30"
                 >
                   Previous
                 </button>
@@ -323,7 +401,7 @@ export function Movies() {
                 <button
                   disabled={streams.length < limit}
                   onClick={() => setPage((p) => p + 1)}
-                  className="px-4 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-sm text-white/70 disabled:opacity-30 transition-colors"
+                  className="rounded-2xl border border-white/10 bg-white/5 px-4 py-2 text-sm text-white/70 transition-colors hover:bg-white/10 disabled:opacity-30"
                 >
                   Next
                 </button>
