@@ -3,12 +3,9 @@ import { RefreshCw, ChevronDown, AlertCircle, Menu } from "lucide-react";
 import { useState } from "react";
 import { playlistsApi, type Playlist } from "../../api/client";
 import { useAppStore } from "../../store";
-import { formatDateTime } from "../../utils/format";
 
 export function Navbar() {
-  const activePlaylistId = useAppStore((s) => s.activePlaylistId);
-  const setActivePlaylistId = useAppStore((s) => s.setActivePlaylistId);
-  const setPlaylists = useAppStore((s) => s.setPlaylists);
+  const { activePlaylistId, setActivePlaylistId, setPlaylists } = useAppStore();
   const sidebarMobileOpen = useAppStore((s) => s.sidebarMobileOpen);
   const setSidebarMobileOpen = useAppStore((s) => s.setSidebarMobileOpen);
   const [showDropdown, setShowDropdown] = useState(false);
@@ -58,12 +55,8 @@ export function Navbar() {
         </p>
         <div className="relative mt-2">
           <button
-            type="button"
             className="flex max-w-[15rem] items-center gap-2 rounded-2xl border border-white/10 bg-white/[0.045] px-3 py-2 text-left transition-colors hover:bg-white/[0.075]"
             onClick={() => setShowDropdown(!showDropdown)}
-            aria-haspopup="listbox"
-            aria-expanded={showDropdown}
-            aria-controls="playlist-switcher"
           >
             <div className={`h-2 w-2 rounded-full ${isSyncing ? "bg-yellow-400 animate-pulse" : isError ? "bg-red-400" : "bg-green-400"}`} />
             <span className="truncate text-sm font-medium text-white/90">
@@ -73,17 +66,10 @@ export function Navbar() {
           </button>
 
           {showDropdown && (
-            <div
-              id="playlist-switcher"
-              role="listbox"
-              className="absolute left-0 top-full z-50 mt-2 w-64 overflow-hidden rounded-3xl border border-white/10 bg-[rgba(10,18,31,0.96)] shadow-[0_28px_70px_rgba(0,0,0,0.4)]"
-            >
+            <div className="absolute left-0 top-full z-50 mt-2 w-64 overflow-hidden rounded-3xl border border-white/10 bg-[rgba(10,18,31,0.96)] shadow-[0_28px_70px_rgba(0,0,0,0.4)]">
               {playlists.map((p) => (
                 <button
-                  type="button"
                   key={p.id}
-                  role="option"
-                  aria-selected={p.id === activePlaylistId}
                   className={`flex w-full items-center gap-2 px-4 py-2.5 text-left text-sm transition-colors ${
                     p.id === activePlaylistId
                       ? "bg-white/10 text-white"
@@ -119,7 +105,7 @@ export function Navbar() {
           </span>
         )}
         {activePlaylist?.last_synced_at && !isSyncing && !isError && (
-          <span>Last sync {formatDateTime(activePlaylist.last_synced_at)}</span>
+          <span>Last sync {new Date(activePlaylist.last_synced_at).toLocaleString()}</span>
         )}
         {!activePlaylist?.last_synced_at && !isSyncing && !isError && (
           <span>Ready to sync playlist</span>
@@ -128,7 +114,6 @@ export function Navbar() {
 
       {activePlaylistId && (
         <button
-          type="button"
           onClick={handleSync}
           disabled={isSyncing}
           title={isSyncing ? "Sync in progress…" : "Sync now"}

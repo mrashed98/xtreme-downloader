@@ -5,21 +5,26 @@ import { vodApi, favoritesApi, type VodStream } from "../api/client";
 import { useAppStore } from "../store";
 import { CategorySidebar } from "../components/ContentGrid/CategorySidebar";
 import { ContentCard } from "../components/ContentGrid/ContentCard";
-import { formatDate, formatUnixDate, formatNumber } from "../utils/format";
 
 const LANGUAGES = ["", "Arabic", "English", "Turkish", "French", "Spanish"];
 
 function formatAdded(value?: string | null) {
-  return formatUnixDate(value);
+  if (!value) return null;
+  const parsed = Number(value);
+  if (Number.isNaN(parsed)) return value;
+  return new Date(parsed * 1000).toLocaleDateString();
 }
 
 function formatReleaseDate(value?: string | null) {
-  return formatDate(value);
+  if (!value) return null;
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return value;
+  return parsed.toLocaleDateString();
 }
 
 function formatBitrate(value?: number | null) {
   if (!value) return null;
-  return `${formatNumber(value)} kb/s`;
+  return `${value.toLocaleString()} kb/s`;
 }
 
 function VodInfoModal({
@@ -98,21 +103,12 @@ function VodInfoModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-sm animate-fade-in">
-      <div
-        className="glass-card w-full max-w-4xl mx-4 animate-slide-up max-h-[90vh] overflow-y-auto"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="vod-dialog-title"
-      >
+      <div className="glass-card w-full max-w-4xl mx-4 animate-slide-up max-h-[90vh] overflow-y-auto">
         {backdropSrc && (
           <div className="relative h-52 overflow-hidden rounded-t-[1.5rem] sm:h-64">
             <img
               src={backdropSrc}
               alt={detail.name}
-              width="1280"
-              height="512"
-              loading="eager"
-              decoding="async"
               className="h-full w-full object-cover"
               onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
             />
@@ -126,10 +122,6 @@ function VodInfoModal({
               <img
                 src={posterSrc}
                 alt={detail.name}
-                width="144"
-                height="208"
-                loading="lazy"
-                decoding="async"
                 className="h-52 w-36 rounded-2xl object-cover flex-shrink-0 shadow-[0_18px_40px_rgba(0,0,0,0.35)]"
                 onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
               />
@@ -139,9 +131,9 @@ function VodInfoModal({
               <div className="flex items-start justify-between gap-3">
                 <div>
                   <p className="page-hero__eyebrow">VOD Details</p>
-                  <h2 id="vod-dialog-title" className="mt-2 text-2xl font-bold text-white">{detail.name}</h2>
+                  <h2 className="mt-2 text-2xl font-bold text-white">{detail.name}</h2>
                 </div>
-                <button type="button" onClick={onClose} className="text-white/50 hover:text-white flex-shrink-0" aria-label="Close movie details">
+                <button onClick={onClose} className="text-white/50 hover:text-white flex-shrink-0">
                   <X size={20} />
                 </button>
               </div>
@@ -235,7 +227,6 @@ function VodInfoModal({
 
                 <div className="flex items-center gap-2">
                   <select
-                    aria-label="Download language"
                     value={language}
                     onChange={(e) => setLanguage(e.target.value)}
                     className="glass-input text-sm py-1.5"
@@ -245,13 +236,12 @@ function VodInfoModal({
                     ))}
                   </select>
                   <button
-                    type="button"
                     onClick={handleDownload}
                     disabled={downloading || downloaded}
                     className="flex items-center gap-2 px-4 py-2 rounded-lg bg-white/10 hover:bg-white/15 text-white text-sm font-medium transition-colors disabled:opacity-50"
                   >
                     <Download size={14} />
-                    {downloaded ? "Queued!" : downloading ? "Loading…" : "Download"}
+                    {downloaded ? "Queued!" : downloading ? "..." : "Download"}
                   </button>
                 </div>
               </div>
@@ -382,8 +372,6 @@ export function Movies() {
           <div className="relative flex-1 min-w-48">
             <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-white/40" />
             <input
-              type="search"
-              aria-label="Search movies"
               className="w-full glass-input pl-11 text-sm"
               placeholder="Search movies..."
               value={search}
@@ -391,7 +379,6 @@ export function Movies() {
             />
           </div>
           <select
-            aria-label="Filter by language"
             className="glass-input text-sm"
             value={language}
             onChange={(e) => { setLanguage(e.target.value); setPage(0); }}
@@ -403,14 +390,12 @@ export function Movies() {
           </select>
           <input
             type="text"
-            aria-label="Filter by genre"
             className="glass-input text-sm w-36"
-            placeholder="Genre…"
+            placeholder="Genre..."
             value={genre}
             onChange={(e) => { setGenre(e.target.value); setPage(0); }}
           />
           <select
-            aria-label="Filter by minimum rating"
             className="glass-input text-sm"
             value={ratingMin || ""}
             onChange={(e) => { setRatingMin(e.target.value ? Number(e.target.value) : undefined); setPage(0); }}

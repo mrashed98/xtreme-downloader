@@ -153,10 +153,6 @@ function SeriesDetailModal({
             <img
               src={series.cover}
               alt={series.name}
-              width="80"
-              height="112"
-              loading="lazy"
-              decoding="async"
               className="w-20 h-28 object-cover rounded-lg flex-shrink-0"
               onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
             />
@@ -166,17 +162,15 @@ function SeriesDetailModal({
               <h2 className="text-xl font-bold text-white">{series.name}</h2>
               <div className="flex items-center gap-2 flex-shrink-0">
                 <button
-                  type="button"
                   onClick={onToggleFavorite}
                   title={isFavorited ? "Remove from favorites" : "Add to favorites"}
-                  aria-label={isFavorited ? `Remove ${series.name} from favorites` : `Add ${series.name} to favorites`}
                   className={`p-1.5 rounded-lg transition-colors ${
                     isFavorited ? "text-pink-400 bg-pink-500/20" : "text-white/40 hover:text-pink-400 hover:bg-white/10"
                   }`}
                 >
                   <Heart size={16} fill={isFavorited ? "currentColor" : "none"} />
                 </button>
-                <button type="button" onClick={onClose} className="text-white/50 hover:text-white" aria-label="Close series details">
+                <button onClick={onClose} className="text-white/50 hover:text-white">
                   <X size={20} />
                 </button>
               </div>
@@ -220,7 +214,6 @@ function SeriesDetailModal({
             {/* Actions */}
             <div className="flex flex-wrap items-center gap-2 mt-3">
               <select
-                aria-label="Download language"
                 value={downloadLanguage}
                 onChange={(e) => setDownloadLanguage(e.target.value)}
                 className="glass-input text-sm py-1.5"
@@ -231,7 +224,6 @@ function SeriesDetailModal({
               </select>
 
               <button
-                type="button"
                 onClick={() => setShowTracking(true)}
                 className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
                   tracking
@@ -262,40 +254,34 @@ function SeriesDetailModal({
         <div className="overflow-y-auto flex-1 p-4 space-y-3">
           {seasons.map((season: Season) => (
             <div key={season.season_num} className="glass-card rounded-xl overflow-hidden">
-              <div className="flex items-center justify-between gap-3 p-3">
+              <button
+                className="w-full flex items-center justify-between p-3 hover:bg-white/5 transition-colors"
+                onClick={() => toggleSeason(season.season_num)}
+              >
+                <div className="flex items-center gap-3">
+                  {expandedSeasons.has(season.season_num) ? (
+                    <ChevronDown size={16} className="text-white/50" />
+                  ) : (
+                    <ChevronRight size={16} className="text-white/50" />
+                  )}
+                  <span className="font-medium text-white">
+                    {season.name || `Season ${season.season_num}`}
+                  </span>
+                  <span className="text-xs text-white/40">
+                    {season.episodes?.length || 0} episodes
+                  </span>
+                  {season.air_date && (
+                    <span className="text-xs text-white/25 hidden sm:block">{season.air_date}</span>
+                  )}
+                </div>
                 <button
-                  type="button"
-                  className="flex min-w-0 flex-1 items-center gap-3 rounded-lg text-left transition-colors hover:bg-white/5"
-                  onClick={() => toggleSeason(season.season_num)}
-                  aria-expanded={expandedSeasons.has(season.season_num)}
-                >
-                  <div className="flex items-center gap-3">
-                    {expandedSeasons.has(season.season_num) ? (
-                      <ChevronDown size={16} className="text-white/50" />
-                    ) : (
-                      <ChevronRight size={16} className="text-white/50" />
-                    )}
-                    <span className="font-medium text-white">
-                      {season.name || `Season ${season.season_num}`}
-                    </span>
-                    <span className="text-xs text-white/40">
-                      {season.episodes?.length || 0} episodes
-                    </span>
-                    {season.air_date && (
-                      <span className="text-xs text-white/25 hidden sm:block">{season.air_date}</span>
-                    )}
-                  </div>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleDownloadSeason(season.season_num)}
+                  onClick={(e) => { e.stopPropagation(); handleDownloadSeason(season.season_num); }}
                   className="flex items-center gap-1 px-2 py-1 rounded-lg bg-white/10 hover:bg-white/15 text-white/70 hover:text-white text-xs transition-colors"
-                  aria-label={`Download all episodes from ${season.name || `Season ${season.season_num}`}`}
                 >
                   <Download size={12} />
                   All
                 </button>
-              </div>
+              </button>
 
               {expandedSeasons.has(season.season_num) && (
                 <div className="border-t border-white/5">
@@ -316,7 +302,6 @@ function SeriesDetailModal({
                         <span className="text-xs text-white/30 hidden sm:block">{ep.duration}</span>
                       )}
                       <button
-                        type="button"
                         onClick={(e) => { e.stopPropagation(); handleToggleMonitored(ep, season); }}
                         className={`p-1.5 rounded-lg transition-colors ${
                           ep.monitored
@@ -328,7 +313,6 @@ function SeriesDetailModal({
                         {ep.monitored ? <Eye size={12} /> : <EyeOff size={12} />}
                       </button>
                       <button
-                        type="button"
                         onClick={() => handlePlayEpisode(ep, season)}
                         disabled={playingEps.has(ep.episode_id)}
                         className="p-1.5 rounded-lg hover:bg-purple-500/20 text-white/40 hover:text-purple-300 transition-colors disabled:opacity-50"
@@ -340,7 +324,6 @@ function SeriesDetailModal({
                         }
                       </button>
                       <button
-                        type="button"
                         onClick={() => handleDownloadEpisode(ep)}
                         disabled={downloadingEps.has(ep.episode_id)}
                         className="p-1.5 rounded-lg hover:bg-white/10 text-white/40 hover:text-white transition-colors disabled:opacity-50"
@@ -532,8 +515,6 @@ export function SeriesPage() {
           <div className="relative flex-1 min-w-48">
             <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-white/40" />
             <input
-              type="search"
-              aria-label="Search series"
               className="w-full glass-input pl-11 text-sm"
               placeholder="Search series..."
               value={search}
@@ -542,7 +523,6 @@ export function SeriesPage() {
           </div>
 
           <select
-            aria-label="Filter series by language"
             className="glass-input text-sm"
             value={language}
             onChange={(e) => { setLanguage(e.target.value); setPage(0); }}
@@ -554,7 +534,6 @@ export function SeriesPage() {
           </select>
 
           <select
-            aria-label="Filter series by genre"
             className="glass-input text-sm"
             value={genre}
             onChange={(e) => { setGenre(e.target.value); setPage(0); }}
@@ -567,13 +546,10 @@ export function SeriesPage() {
 
           <div className="relative" ref={actorRef}>
             <button
-              type="button"
               onClick={() => setActorOpen((v) => !v)}
               className={`glass-input text-sm flex items-center gap-2 min-w-36 ${
                 selectedActors.length ? "text-white" : "text-white/50"
               }`}
-              aria-haspopup="listbox"
-              aria-expanded={actorOpen}
             >
               <Users size={13} className="flex-shrink-0" />
               <span className="truncate">
@@ -592,17 +568,15 @@ export function SeriesPage() {
                   <div className="relative">
                     <Search size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-white/30" />
                     <input
-                      type="search"
-                      aria-label="Search actors"
                       className="w-full glass-input pl-10 py-1.5 text-xs"
                       placeholder="Search actors..."
                       value={actorSearch}
                       onChange={(e) => setActorSearch(e.target.value)}
+                      autoFocus
                     />
                   </div>
                   {selectedActors.length > 0 && (
                     <button
-                      type="button"
                       onClick={() => { setSelectedActors([]); setPage(0); }}
                       className="text-xs text-white/40 hover:text-white px-1"
                     >
@@ -616,7 +590,6 @@ export function SeriesPage() {
                     : actors
                   ).map((actor) => (
                     <button
-                      type="button"
                       key={actor}
                       onClick={() => {
                         setSelectedActors((prev) =>
@@ -647,7 +620,6 @@ export function SeriesPage() {
           </div>
 
           <select
-            aria-label="Filter series by minimum rating"
             className="glass-input text-sm"
             value={ratingMin || ""}
             onChange={(e) => { setRatingMin(e.target.value ? Number(e.target.value) : undefined); setPage(0); }}

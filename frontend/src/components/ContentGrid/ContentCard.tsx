@@ -31,24 +31,15 @@ export function ContentCard({
   footer,
 }: ContentCardProps) {
   return (
-    <article className="glass-card group relative overflow-hidden transition-all duration-300 hover:-translate-y-1 hover:shadow-[0_32px_60px_rgba(5,9,16,0.35)] animate-slide-up">
-      {onClick && (
-        <button
-          type="button"
-          onClick={onClick}
-          aria-label={`Open details for ${title}`}
-          className="absolute inset-0 z-0 rounded-[24px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300/80 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950"
-        />
-      )}
+    <div
+      className="glass-card group cursor-pointer overflow-hidden transition-all duration-300 hover:-translate-y-1 hover:shadow-[0_32px_60px_rgba(5,9,16,0.35)] animate-slide-up"
+      onClick={onClick}
+    >
       <div className="relative aspect-[0.75] overflow-hidden bg-white/5">
         {image ? (
           <img
             src={image}
             alt={title}
-            width="320"
-            height="427"
-            loading="lazy"
-            decoding="async"
             className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
             onError={(e) => {
               (e.target as HTMLImageElement).style.display = "none";
@@ -66,20 +57,16 @@ export function ContentCard({
         <div className="absolute inset-0 flex items-center justify-center gap-3 bg-[rgba(8,13,22,0.35)] opacity-0 transition-opacity duration-300 group-hover:opacity-100">
           {onPlay && (
             <button
-              type="button"
               className="rounded-full p-3 shadow-lg btn-accent"
               onClick={(e) => { e.stopPropagation(); onPlay(); }}
-              aria-label={`Play ${title}`}
             >
               <Play size={16} fill="white" />
             </button>
           )}
           {onDownload && (
             <button
-              type="button"
               className="rounded-full bg-white/20 p-3 text-white transition-colors hover:bg-white/30"
               onClick={(e) => { e.stopPropagation(); onDownload(); }}
-              aria-label={`Download ${title}`}
             >
               <Download size={16} />
             </button>
@@ -88,7 +75,6 @@ export function ContentCard({
 
         {onFavorite && (
           <button
-            type="button"
             className={`absolute left-3 top-3 z-10 rounded-full p-2 transition-colors ${
               isFavorited
                 ? "bg-rose-500/80 text-white"
@@ -96,7 +82,6 @@ export function ContentCard({
             }`}
             onClick={(e) => { e.stopPropagation(); onFavorite(); }}
             title={isFavorited ? "Remove from favorites" : "Add to favorites"}
-            aria-label={isFavorited ? `Remove ${title} from favorites` : `Add ${title} to favorites`}
           >
             <Heart size={12} fill={isFavorited ? "currentColor" : "none"} />
           </button>
@@ -126,6 +111,6 @@ export function ContentCard({
       <div className="p-3 pt-2">
         {footer && <div>{footer}</div>}
       </div>
-    </article>
+    </div>
   );
 }

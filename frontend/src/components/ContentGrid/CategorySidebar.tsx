@@ -10,7 +10,6 @@ interface CategorySidebarProps {
 
 export function CategorySidebar({ categories, selected, onSelect }: CategorySidebarProps) {
   const [search, setSearch] = useState("");
-  const searchId = "category-search";
 
   const filtered = search
     ? categories.filter((c) => c.name.toLowerCase().includes(search.toLowerCase()))
@@ -33,11 +32,8 @@ export function CategorySidebar({ categories, selected, onSelect }: CategorySide
       <div className="relative flex-shrink-0">
         <Search size={12} className="absolute left-3 top-1/2 -translate-y-1/2 text-white/30" />
         <input
-          id={searchId}
-          type="search"
-          aria-label="Search categories"
           className="w-full glass-input pl-9 py-2 text-sm"
-          placeholder="Search categories…"
+          placeholder="Search categories"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
         />
