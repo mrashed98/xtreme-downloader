@@ -395,7 +395,7 @@ export function Downloads() {
   };
 
   return (
-    <div className="page-shell h-full overflow-y-auto space-y-5 nav-clearance">
+    <div className="page-shell flex-1 min-h-0 overflow-y-auto space-y-5 nav-clearance">
       <section className="glass-card page-hero">
         <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
           <div>

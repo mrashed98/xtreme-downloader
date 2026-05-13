@@ -45,7 +45,7 @@ export function LiveTV() {
   }
 
   return (
-    <div className="page-shell flex min-h-0 h-full flex-col lg:grid lg:grid-cols-[260px_minmax(0,1fr)] lg:gap-6">
+    <div className="page-shell flex min-h-0 flex-1 flex-col lg:grid lg:grid-cols-[260px_minmax(0,1fr)] lg:gap-6">
       <CategorySidebar
         categories={categories}
         selected={selectedCategory}

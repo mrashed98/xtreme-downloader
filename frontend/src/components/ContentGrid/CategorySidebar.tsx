@@ -39,8 +39,8 @@ export function CategorySidebar({ categories, selected, onSelect }: CategorySide
         />
       </div>
 
-      <div className="relative">
-        <div className="flex gap-2 overflow-x-auto pb-1 lg:block lg:flex-1 lg:space-y-1 lg:overflow-x-hidden lg:overflow-y-auto [mask-image:linear-gradient(to_right,black_85%,transparent)] lg:[mask-image:none]">
+      <div className="relative lg:flex-1 lg:min-h-0">
+        <div className="flex gap-2 overflow-x-auto pb-1 lg:block lg:h-full lg:space-y-1 lg:overflow-x-hidden lg:overflow-y-auto [mask-image:linear-gradient(to_right,black_85%,transparent)] lg:[mask-image:none]">
           <button
             className={`shrink-0 min-h-[2.75rem] rounded-full px-3 py-2.5 text-sm transition-colors lg:w-full lg:rounded-2xl lg:text-left ${
               selected === null

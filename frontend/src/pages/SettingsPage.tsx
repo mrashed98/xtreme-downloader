@@ -210,7 +210,7 @@ export function SettingsPage() {
   };
 
   return (
-    <div className="page-shell h-full overflow-y-auto space-y-6 nav-clearance">
+    <div className="page-shell flex-1 min-h-0 overflow-y-auto space-y-6 nav-clearance">
       <section className="glass-card page-hero">
         <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
           <div>
