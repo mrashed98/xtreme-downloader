@@ -431,10 +431,10 @@ export function Movies() {
   }
 
   return (
-    <div className="page-shell flex min-h-0 flex-1 flex-col lg:grid lg:grid-cols-[260px_minmax(0,1fr)] lg:gap-6">
+    <div className="page-shell flex flex-1 min-h-0 overflow-y-auto flex-col lg:overflow-hidden lg:grid lg:grid-cols-[260px_minmax(0,1fr)] lg:gap-6">
       <CategorySidebar categories={movieCategories} selected={selectedCategory} onSelect={(id) => { setSelectedCategory(id); setPage(0); }} />
 
-      <div className="mt-5 flex min-w-0 min-h-0 flex-1 flex-col lg:mt-0">
+      <div className="mt-5 flex min-w-0 flex-col lg:min-h-0 lg:mt-0">
         <section className="glass-card page-hero">
           <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
             <div>
@@ -506,12 +506,12 @@ export function Movies() {
         </div>
 
         {isLoading ? (
-          <div className="flex items-center justify-center flex-1">
+          <div className="flex items-center justify-center py-20">
             <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-purple-500" />
           </div>
         ) : (
           <>
-            <div className="flex-1 min-h-0 overflow-y-auto nav-clearance">
+            <div className="lg:flex-1 lg:min-h-0 lg:overflow-y-auto nav-clearance">
               <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-5 2xl:grid-cols-6">
                 {displayedStreams.map((stream) => (
                   <ContentCard
