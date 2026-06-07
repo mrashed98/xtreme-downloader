@@ -1,26 +1,56 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Hls from "hls.js";
-import { AlertCircle, ChevronRight, RotateCcw, SkipBack, SkipForward, X } from "lucide-react";
+import {
+  AlertCircle,
+  ChevronDown,
+  Maximize,
+  Pause,
+  Play,
+  RotateCcw,
+  SkipBack,
+  SkipForward,
+  Volume2,
+  VolumeX,
+} from "lucide-react";
 import { useAppStore } from "../../store";
+import { Button } from "../ds";
 
 const LOAD_TIMEOUT_MS = 15000;
+const CHROME_HIDE_MS = 3200;
+
+function fmtTime(s: number): string {
+  if (!Number.isFinite(s) || s < 0) return "0:00";
+  const h = Math.floor(s / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  const sec = Math.floor(s % 60);
+  if (h > 0) return `${h}:${String(m).padStart(2, "0")}:${String(sec).padStart(2, "0")}`;
+  return `${m}:${String(sec).padStart(2, "0")}`;
+}
 
 export function VideoPlayer() {
   const { player, closePlayer, nextTrack, prevTrack } = useAppStore();
+  const rootRef = useRef<HTMLDivElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const hlsRef = useRef<Hls | null>(null);
   const loadTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const countdownRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const hideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [showUpNext, setShowUpNext] = useState(false);
   const [countdown, setCountdown] = useState(8);
   const [isLoading, setIsLoading] = useState(true);
   const [playbackError, setPlaybackError] = useState<string | null>(null);
   const [retryNonce, setRetryNonce] = useState(0);
+  const [playing, setPlaying] = useState(false);
+  const [muted, setMuted] = useState(false);
+  const [elapsed, setElapsed] = useState(0);
+  const [duration, setDuration] = useState(0);
+  const [showChrome, setShowChrome] = useState(true);
 
   const currentItem = player.queue[player.queueIndex] ?? null;
   const hasNext = player.queueIndex < player.queue.length - 1;
   const hasPrev = player.queueIndex > 0;
   const nextItem = hasNext ? player.queue[player.queueIndex + 1] : null;
+  const isLive = !Number.isFinite(duration) || duration === 0;
 
   const clearCountdown = () => {
     if (countdownRef.current) {
@@ -51,6 +81,22 @@ export function VideoPlayer() {
     }
   };
 
+  /* chrome auto-hide */
+  const wake = useCallback(() => {
+    setShowChrome(true);
+    if (hideTimerRef.current) clearTimeout(hideTimerRef.current);
+    hideTimerRef.current = setTimeout(() => setShowChrome(false), CHROME_HIDE_MS);
+  }, []);
+
+  useEffect(() => {
+    if (!player.isOpen) return;
+    wake();
+    return () => {
+      if (hideTimerRef.current) clearTimeout(hideTimerRef.current);
+    };
+  }, [player.isOpen, player.queueIndex, wake]);
+
+  /* load + attach stream */
   useEffect(() => {
     if (!player.isOpen || !currentItem || !videoRef.current) return;
 
@@ -58,6 +104,8 @@ export function VideoPlayer() {
     setShowUpNext(false);
     setIsLoading(true);
     setPlaybackError(null);
+    setElapsed(0);
+    setDuration(0);
     clearCountdown();
     teardownPlayback();
 
@@ -129,8 +177,10 @@ export function VideoPlayer() {
       video.removeEventListener("error", videoErrorHandler);
       teardownPlayback();
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [player.isOpen, player.queueIndex, currentItem?.url, currentItem?.fallbackUrl, currentItem?.type, retryNonce]);
 
+  /* playback state + progress + up-next */
   useEffect(() => {
     if (!videoRef.current) return;
     const video = videoRef.current;
@@ -153,18 +203,31 @@ export function VideoPlayer() {
     };
 
     const handleTimeUpdate = () => {
-      if (hasNext && video.duration > 0 && video.currentTime >= video.duration - 15) {
+      setElapsed(video.currentTime);
+      if (hasNext && Number.isFinite(video.duration) && video.duration > 0 && video.currentTime >= video.duration - 15) {
         setShowUpNext((prev) => prev || true);
       }
     };
 
+    const handleDuration = () => setDuration(video.duration);
+    const handlePlay = () => setPlaying(true);
+    const handlePause = () => setPlaying(false);
+
     video.addEventListener("ended", handleEnded);
     video.addEventListener("timeupdate", handleTimeUpdate);
+    video.addEventListener("durationchange", handleDuration);
+    video.addEventListener("play", handlePlay);
+    video.addEventListener("pause", handlePause);
     return () => {
       video.removeEventListener("ended", handleEnded);
       video.removeEventListener("timeupdate", handleTimeUpdate);
+      video.removeEventListener("durationchange", handleDuration);
+      video.removeEventListener("play", handlePlay);
+      video.removeEventListener("pause", handlePause);
     };
   }, [hasNext, nextTrack, player.queueIndex]);
+
+  if (!player.isOpen || !currentItem) return null;
 
   const handleNext = () => {
     clearCountdown();
@@ -188,139 +251,163 @@ export function VideoPlayer() {
     setRetryNonce((n) => n + 1);
   };
 
-  if (!player.isOpen || !currentItem) return null;
+  const togglePlay = () => {
+    const v = videoRef.current;
+    if (!v) return;
+    if (v.paused) v.play().catch(() => {});
+    else v.pause();
+    wake();
+  };
+
+  const toggleMute = () => {
+    const v = videoRef.current;
+    if (!v) return;
+    v.muted = !v.muted;
+    setMuted(v.muted);
+  };
+
+  const toggleFullscreen = () => {
+    const el = rootRef.current;
+    if (!el) return;
+    if (document.fullscreenElement) document.exitFullscreen();
+    else el.requestFullscreen?.();
+  };
+
+  const scrub = (e: React.MouseEvent<HTMLDivElement>) => {
+    const v = videoRef.current;
+    if (!v || !Number.isFinite(duration) || duration <= 0) return;
+    const rect = e.currentTarget.getBoundingClientRect();
+    v.currentTime = ((e.clientX - rect.left) / rect.width) * duration;
+  };
+
+  const pct = !isLive && duration > 0 ? Math.min(100, (elapsed / duration) * 100) : 0;
+  const chromeVisible = showChrome || !playing || isLoading || !!playbackError;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 backdrop-blur-sm animate-fade-in">
-      <div className="relative mx-2 w-full max-w-5xl sm:mx-4">
-        <div className="mb-2 flex items-center justify-between">
-          <div className="flex min-w-0 items-center gap-2">
-            {player.queue.length > 1 && (
-              <span className="flex-shrink-0 text-xs text-white/40">
-                {player.queueIndex + 1} / {player.queue.length}
-              </span>
-            )}
-            <h3 className="truncate font-medium text-white">{currentItem.title}</h3>
-          </div>
-          <div className="flex flex-shrink-0 items-center gap-1">
-            {hasPrev && (
-              <button
-                onClick={handlePrev}
-                className="rounded-lg p-2.5 text-white/60 transition-colors hover:bg-white/10 hover:text-white"
-                title="Previous"
-              >
-                <SkipBack size={18} />
-              </button>
-            )}
-            {hasNext && (
-              <button
-                onClick={handleNext}
-                className="rounded-lg p-2.5 text-white/60 transition-colors hover:bg-white/10 hover:text-white"
-                title="Next episode"
-              >
-                <SkipForward size={18} />
-              </button>
-            )}
-            <button
-              onClick={closePlayer}
-              className="rounded-lg p-2.5 text-white/70 transition-colors hover:bg-white/10 hover:text-white"
-            >
-              <X size={20} />
-            </button>
+    <div className="xplayover" ref={rootRef} onMouseMove={wake} onTouchStart={wake}>
+      <video ref={videoRef} className="xplay__video" playsInline onClick={togglePlay} />
+
+      {isLoading && !playbackError && (
+        <div className="xplay__loading">
+          <div className="xplay__spinner" />
+          <div className="xplay__loadtxt">Loading the good stuff…</div>
+        </div>
+      )}
+
+      {!isLoading && !playing && !playbackError && !showUpNext && (
+        <div className="xplay__center">
+          <button className="xplay__big" onClick={togglePlay} aria-label="Play">
+            <Play fill="currentColor" stroke="none" />
+          </button>
+        </div>
+      )}
+
+      <div className={"xplay__chrome" + (chromeVisible ? "" : " is-hidden")}>
+        <div className="xplay__top">
+          <button className="xplay__close" onClick={closePlayer} aria-label="Close player">
+            <ChevronDown size={22} />
+          </button>
+          <div className="xplay__heading">
+            <span className="xplay__eyebrow">
+              {isLive
+                ? "● Live · Streaming now"
+                : player.queue.length > 1
+                ? `Now playing · ${player.queueIndex + 1}/${player.queue.length}`
+                : "Now playing"}
+            </span>
+            <span className="xplay__name">{currentItem.title}</span>
           </div>
         </div>
 
-        <div className="relative overflow-hidden rounded-xl bg-black shadow-2xl">
-          <video
-            ref={videoRef}
-            className="aspect-video w-full"
-            controls
-            playsInline
-          />
-
-          {isLoading && !playbackError && (
-            <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-black/55">
-              <div className="h-10 w-10 animate-spin rounded-full border-2 border-white/20 border-t-white" />
-              <p className="text-sm text-white/70">Loading stream…</p>
+        <div className="xplay__bottom">
+          {!isLive && (
+            <div className="xplay__scrub" onClick={scrub}>
+              <div className="xplay__scrubfill" style={{ width: pct + "%" }} />
+              <div className="xplay__knob" style={{ left: pct + "%" }} />
             </div>
           )}
-
-          {playbackError && (
-            <div className="absolute inset-0 flex items-center justify-center bg-black/72 p-6">
-              <div className="glass-card max-w-md p-5 text-center">
-                <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-red-500/15 text-red-300">
-                  <AlertCircle size={22} />
-                </div>
-                <h4 className="text-base font-semibold text-white">Playback could not start</h4>
-                <p className="mt-2 text-sm leading-relaxed text-white/65">{playbackError}</p>
-                <div className="mt-4 flex justify-center gap-3">
-                  <button
-                    onClick={handleRetry}
-                    className="flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-4 py-2 text-sm text-white/80 transition-colors hover:bg-white/10"
-                  >
-                    <RotateCcw size={14} />
-                    Retry
+          <div className="xplay__ctlrow">
+            <div className="xplay__ctll">
+              <button className="xpc" onClick={togglePlay} aria-label={playing ? "Pause" : "Play"}>
+                {playing ? <Pause /> : <Play fill="currentColor" stroke="none" />}
+              </button>
+              {player.queue.length > 1 && (
+                <>
+                  <button className="xpc" onClick={handlePrev} disabled={!hasPrev} aria-label="Previous">
+                    <SkipBack fill="currentColor" stroke="none" />
                   </button>
-                  <button
-                    onClick={closePlayer}
-                    className="rounded-xl px-4 py-2 text-sm font-medium btn-accent"
-                  >
-                    Close
+                  <button className="xpc" onClick={handleNext} disabled={!hasNext} aria-label="Next">
+                    <SkipForward fill="currentColor" stroke="none" />
                   </button>
-                </div>
-              </div>
+                </>
+              )}
+              {isLive ? (
+                <span className="xplay__eyebrow" style={{ color: "var(--hot-500)" }}>
+                  ● LIVE
+                </span>
+              ) : (
+                <span className="xplay__time">
+                  {fmtTime(elapsed)} <span>/ {fmtTime(duration)}</span>
+                </span>
+              )}
             </div>
-          )}
-
-          {showUpNext && nextItem && !playbackError && (
-            <div className="absolute bottom-20 left-4 right-4 animate-slide-up glass-card p-3 sm:left-auto sm:w-64">
-              <div className="flex items-start justify-between gap-2">
-                <div className="min-w-0">
-                  <p className="mb-0.5 text-xs text-white/50">Up Next in {countdown}s</p>
-                  <p className="truncate text-sm font-medium text-white">{nextItem.title}</p>
-                </div>
-                <button
-                  onClick={handleDismissUpNext}
-                  className="flex-shrink-0 text-white/40 hover:text-white"
-                >
-                  <X size={14} />
-                </button>
-              </div>
-              <button
-                onClick={handleNext}
-                className="mt-2 flex w-full items-center justify-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium btn-accent"
-              >
-                <ChevronRight size={14} />
-                Play Now
+            <div className="xplay__ctlr">
+              <button className="xpc" onClick={toggleMute} aria-label={muted ? "Unmute" : "Mute"}>
+                {muted ? <VolumeX /> : <Volume2 />}
+              </button>
+              <button className="xpc" onClick={toggleFullscreen} aria-label="Fullscreen">
+                <Maximize />
               </button>
             </div>
-          )}
-        </div>
-
-        {player.queue.length > 1 && (
-          <div className="mt-2 flex gap-1.5 overflow-x-auto pb-1">
-            {player.queue.map((item, i) => (
-              <button
-                key={i}
-                onClick={() => {
-                  clearCountdown();
-                  setShowUpNext(false);
-                  setRetryNonce(0);
-                  const store = useAppStore.getState();
-                  store.openQueue(store.player.queue, i);
-                }}
-                className={`flex-shrink-0 min-w-[2.25rem] min-h-[2.25rem] rounded-lg px-2.5 py-1 text-xs transition-colors flex items-center justify-center ${
-                  i === player.queueIndex
-                    ? "btn-accent font-medium"
-                    : "bg-white/10 text-white/60 hover:bg-white/15 hover:text-white"
-                }`}
-              >
-                {i + 1}
-              </button>
-            ))}
           </div>
-        )}
+        </div>
       </div>
+
+      {playbackError && (
+        <div className="xplay__err">
+          <div className="xplay__errcard">
+            <span className="xplay__errico">
+              <AlertCircle size={24} />
+            </span>
+            <h4>Playback could not start</h4>
+            <p>{playbackError}</p>
+            <div style={{ display: "flex", justifyContent: "center", gap: 12 }}>
+              <Button variant="outline" icon={<RotateCcw size={16} />} onClick={handleRetry}>
+                Retry
+              </Button>
+              <Button variant="primary" onClick={closePlayer}>
+                Close
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showUpNext && nextItem && !playbackError && (
+        <div className="xupnext">
+          <div className="xupnext__eyebrow">
+            <span>Up Next · auto-play in {countdown}s</span>
+            <span className="xupnext__count">
+              {player.queueIndex + 2}/{player.queue.length}
+            </span>
+          </div>
+          <div className="xupnext__body">
+            <div className="xupnext__thumb" />
+            <div style={{ minWidth: 0 }}>
+              <div className="xupnext__title">{nextItem.title}</div>
+              <div className="xupnext__sub">Episode {player.queueIndex + 2} of {player.queue.length}</div>
+            </div>
+          </div>
+          <div className="xupnext__actions">
+            <Button variant="primary" size="sm" block icon={<Play size={16} fill="currentColor" stroke="none" />} onClick={handleNext}>
+              Play now
+            </Button>
+            <Button variant="outline" size="sm" onClick={handleDismissUpNext}>
+              Dismiss
+            </Button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

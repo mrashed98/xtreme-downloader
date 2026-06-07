@@ -127,7 +127,19 @@ export interface Series {
   plot: string | null;
   youtube_trailer: string | null;
   release_date: string | null;
+  backdrop?: string | null;
+  episode_run_time?: string | null;
+  last_modified?: string | null;
   seasons?: Season[];
+}
+
+export interface AccountInfo {
+  status: string | null;
+  is_trial: boolean;
+  exp_date: number | null;
+  created_at: number | null;
+  max_connections: number | null;
+  active_connections: number | null;
 }
 
 export interface Favorite {
@@ -175,6 +187,7 @@ export const playlistsApi = {
     api.put<Playlist>(`/playlists/${id}`, data).then((r) => r.data),
   delete: (id: number) => api.delete(`/playlists/${id}`),
   sync: (id: number) => api.post<Playlist>(`/playlists/${id}/sync`).then((r) => r.data),
+  account: (id: number) => api.get<AccountInfo>(`/playlists/${id}/account`).then((r) => r.data),
 };
 
 // Live API
@@ -201,6 +214,7 @@ export const vodApi = {
       cast?: string;
       rating_min?: number;
       search?: string;
+      include_adult?: boolean;
       limit?: number;
       offset?: number;
     }

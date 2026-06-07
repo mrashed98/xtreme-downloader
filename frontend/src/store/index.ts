@@ -44,11 +44,9 @@ interface AppState {
   activeDownloadCount: number;
   setActiveDownloadCount: (count: number) => void;
 
-  // Sidebar UI
-  sidebarCollapsed: boolean;
-  toggleSidebar: () => void;
-  sidebarMobileOpen: boolean;
-  setSidebarMobileOpen: (open: boolean) => void;
+  // Content preferences
+  showAdult: boolean;
+  setShowAdult: (show: boolean) => void;
 }
 
 export const useAppStore = create<AppState>()(
@@ -88,16 +86,14 @@ export const useAppStore = create<AppState>()(
       activeDownloadCount: 0,
       setActiveDownloadCount: (count) => set({ activeDownloadCount: count }),
 
-      sidebarCollapsed: false,
-      toggleSidebar: () => set((s) => ({ sidebarCollapsed: !s.sidebarCollapsed })),
-      sidebarMobileOpen: false,
-      setSidebarMobileOpen: (open) => set({ sidebarMobileOpen: open }),
+      showAdult: false,
+      setShowAdult: (show) => set({ showAdult: show }),
     }),
     {
       name: "xtreme-store",
       partialize: (state) => ({
         activePlaylistId: state.activePlaylistId,
-        sidebarCollapsed: state.sidebarCollapsed,
+        showAdult: state.showAdult,
       }),
     }
   )

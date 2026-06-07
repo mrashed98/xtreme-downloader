@@ -1,33 +1,25 @@
-import { useQuery } from "@tanstack/react-query";
-import { Film, Tv, Clapperboard, Download, Plus, RefreshCw, Trash2, Edit } from "lucide-react";
 import { useState } from "react";
-import { Link } from "react-router-dom";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { Link, useNavigate } from "react-router-dom";
 import axios from "axios";
 import { toast } from "sonner";
-import { downloadsApi, playlistsApi, seriesApi, vodApi, type Playlist } from "../api/client";
+import {
+  AlertTriangle,
+  CheckCircle2,
+  ChevronRight,
+  Download,
+  Edit,
+  Folder,
+  Link as LinkIcon,
+  Plus,
+  RefreshCw,
+  Trash2,
+  Tv,
+} from "lucide-react";
+import { downloadsApi, playlistsApi, seriesApi, vodApi, type Playlist, type Series, type VodStream } from "../api/client";
 import { useAppStore } from "../store";
-import { GlassCard } from "../components/Layout/GlassCard";
-
-interface StatCardProps {
-  label: string;
-  value: number | string;
-  icon: React.ReactNode;
-  color: string;
-}
-
-function StatCard({ label, value, icon, color }: StatCardProps) {
-  return (
-    <GlassCard className="p-5 sm:p-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <p className="text-xs font-semibold uppercase tracking-[0.24em] text-white/40">{label}</p>
-          <p className="mt-2 text-2xl font-bold text-white">{value}</p>
-        </div>
-        <div className={`rounded-2xl p-3 ${color}`}>{icon}</div>
-      </div>
-    </GlassCard>
-  );
-}
+import { Badge, Button, Input, Modal, SectionHead, StatCard, TONE_BG, toneFg, toneFor } from "../components/ds";
+import { usePlaylists } from "../components/Layout/TopNav";
 
 interface PlaylistFormData {
   name: string;
@@ -36,7 +28,7 @@ interface PlaylistFormData {
   password: string;
 }
 
-function PlaylistModal({
+export function PlaylistModal({
   onClose,
   onSaved,
   existing,
@@ -54,8 +46,13 @@ function PlaylistModal({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const set = (k: keyof PlaylistFormData) => (e: React.ChangeEvent<HTMLInputElement>) =>
+    setForm((f) => ({ ...f, [k]: e.target.value }));
+
+  const valid = form.name.trim() && form.base_url.trim() && form.username.trim() && (existing || form.password);
+
+  const handleSubmit = async () => {
+    if (!valid) return;
     setLoading(true);
     setError("");
     try {
@@ -77,84 +74,104 @@ function PlaylistModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm">
-      <GlassCard className="w-full max-w-md mx-4 p-6 animate-slide-up">
-        <h2 className="text-lg font-semibold text-white mb-5">
-          {existing ? "Edit Playlist" : "Add Playlist"}
-        </h2>
+    <Modal
+      eyebrow={existing ? "Edit source" : "New source"}
+      title={existing ? "Edit Playlist" : "Add Playlist"}
+      onClose={onClose}
+      footer={
+        <>
+          <Button variant="outline" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button variant="primary" disabled={!valid || loading} onClick={handleSubmit}>
+            {loading ? "Saving…" : existing ? "Save changes" : "Add playlist"}
+          </Button>
+        </>
+      }
+    >
+      <Input label="Playlist name" placeholder="Main Provider" value={form.name} onChange={set("name")} />
+      <Input
+        label="Server URL"
+        placeholder="http://line.provider.tv:8080"
+        value={form.base_url}
+        onChange={set("base_url")}
+        icon={<LinkIcon size={18} />}
+        hint="Xtream Codes base URL — host and port."
+      />
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
+        <Input label="Username" placeholder="username" value={form.username} onChange={set("username")} />
+        <Input
+          label={existing ? "Password (blank = keep)" : "Password"}
+          type="password"
+          placeholder="••••••••"
+          value={form.password}
+          onChange={set("password")}
+        />
+      </div>
+      {error && <p className="xmodal__err">{error}</p>}
+    </Modal>
+  );
+}
 
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
-            <label className="block text-xs font-semibold text-white/50 uppercase tracking-wider mb-1.5">Name</label>
-            <input
-              className="w-full glass-input"
-              placeholder="My IPTV"
-              value={form.name}
-              onChange={(e) => setForm({ ...form, name: e.target.value })}
-              required
-            />
-          </div>
-          <div>
-            <label className="block text-xs font-semibold text-white/50 uppercase tracking-wider mb-1.5">Server URL</label>
-            <input
-              className="w-full glass-input"
-              placeholder="http://server.example.com:8080"
-              value={form.base_url}
-              onChange={(e) => setForm({ ...form, base_url: e.target.value })}
-              required
-            />
-          </div>
-          <div>
-            <label className="block text-xs font-semibold text-white/50 uppercase tracking-wider mb-1.5">Username</label>
-            <input
-              className="w-full glass-input"
-              placeholder="username"
-              value={form.username}
-              onChange={(e) => setForm({ ...form, username: e.target.value })}
-              required
-            />
-          </div>
-          <div>
-            <label className="block text-xs font-semibold text-white/50 uppercase tracking-wider mb-1.5">
-              Password {existing && "(leave blank to keep)"}
-            </label>
-            <input
-              type="password"
-              className="w-full glass-input"
-              placeholder="password"
-              value={form.password}
-              onChange={(e) => setForm({ ...form, password: e.target.value })}
-              required={!existing}
-            />
-          </div>
+function fmtAgo(date: string | null): string {
+  if (!date) return "never";
+  const min = Math.max(0, Math.round((Date.now() - new Date(date).getTime()) / 60000));
+  if (min < 1) return "just now";
+  if (min < 60) return `${min}m ago`;
+  if (min < 1440) return `${Math.round(min / 60)}h ago`;
+  return `${Math.round(min / 1440)}d ago`;
+}
 
-          {error && <p className="text-red-400 text-sm">{error}</p>}
-
-          <div className="flex gap-3 pt-2">
-            <button type="button" onClick={onClose} className="flex-1 py-2.5 rounded-lg bg-white/5 hover:bg-white/10 text-white/70 text-sm transition-colors">
-              Cancel
-            </button>
-            <button type="submit" disabled={loading} className="flex-1 py-2.5 rounded-lg btn-accent text-sm font-medium disabled:opacity-50">
-              {loading ? "Saving..." : "Save"}
-            </button>
-          </div>
-        </form>
-      </GlassCard>
+function LatestPanel({
+  title,
+  items,
+  to,
+}: {
+  title: string;
+  items: { id: string; name: string; image: string | null; sub: string }[];
+  to: string;
+}) {
+  const navigate = useNavigate();
+  return (
+    <div className="xcard xcard--pad">
+      <SectionHead title={title} more="See all" onMore={() => navigate(to)} />
+      <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+        {items.map((m) => {
+          const tone = toneFor(m.name);
+          return (
+            <div key={m.id} className="xmini" onClick={() => navigate(to)}>
+              <div className="xmini__thumb" style={{ background: TONE_BG[tone] }}>
+                {m.image ? (
+                  <img src={m.image} alt="" onError={(e) => ((e.target as HTMLImageElement).style.display = "none")} />
+                ) : (
+                  <span style={{ color: toneFg(tone) }}>{m.name.split(" ")[0]}</span>
+                )}
+              </div>
+              <div style={{ minWidth: 0, flex: 1 }}>
+                <div className="xmini__name">{m.name}</div>
+                <div className="xmini__sub">{m.sub}</div>
+              </div>
+              <ChevronRight size={16} style={{ color: "var(--text-tertiary)", flex: "none" }} />
+            </div>
+          );
+        })}
+        {items.length === 0 && (
+          <p style={{ color: "var(--text-tertiary)", fontSize: 14, padding: "10px 9px", margin: 0 }}>
+            Nothing here yet. Go find something worth the bandwidth.
+          </p>
+        )}
+      </div>
     </div>
   );
 }
 
 export function Dashboard() {
+  const navigate = useNavigate();
+  const [editing, setEditing] = useState<Playlist | null>(null);
   const [showModal, setShowModal] = useState(false);
-  const [editPlaylist, setEditPlaylist] = useState<Playlist | null>(null);
   const { setActivePlaylistId, activePlaylistId } = useAppStore();
 
-  const { data: playlists = [], refetch } = useQuery({
-    queryKey: ["playlists"],
-    queryFn: playlistsApi.list,
-    refetchInterval: (query) =>
-      query.state.data?.some((p) => p.sync_status === "syncing") ? 2000 : false,
-  });
+  const { data: playlists = [], refetch } = usePlaylists();
 
   const { data: downloads = [] } = useQuery({
     queryKey: ["downloads"],
@@ -176,9 +193,12 @@ export function Dashboard() {
     staleTime: 60_000,
   });
 
-  const activeCount = downloads.filter((d) => d.status === "downloading").length;
-  const completedCount = downloads.filter((d) => d.status === "completed").length;
-  const failedCount = downloads.filter((d) => d.status === "failed").length;
+  const qc = useQueryClient();
+  const counts = {
+    downloading: downloads.filter((d) => d.status === "downloading").length,
+    completed: downloads.filter((d) => d.status === "completed").length,
+    failed: downloads.filter((d) => d.status === "failed").length,
+  };
 
   const handleDelete = (id: number, name: string) => {
     toast(`Delete playlist "${name}"?`, {
@@ -196,196 +216,190 @@ export function Dashboard() {
   const handleSync = async (id: number) => {
     await playlistsApi.sync(id);
     refetch();
+    qc.invalidateQueries({ queryKey: ["playlists"] });
   };
 
   return (
-    <div className="page-shell flex-1 min-h-0 overflow-y-auto space-y-6 nav-clearance">
-      <section className="glass-card page-hero overflow-hidden">
-        <div className="flex flex-col gap-5 xl:flex-row xl:items-end xl:justify-between">
-          <div>
-            <p className="page-hero__eyebrow">Overview</p>
-            <h1 className="page-hero__title">Your IPTV command deck, rebuilt for web and mobile.</h1>
-            <p className="page-hero__body">
-              Xtreme Downloader is a media control frontend for syncing IPTV playlists, exploring live channels and on-demand catalogs, and managing downloads in one polished workspace.
-            </p>
-          </div>
-          <div className="page-actions">
-            <span className="rounded-full border border-white/10 px-3 py-2 text-sm text-white/55">
-              {playlists.length} playlists connected
-            </span>
-            <button
-              onClick={() => { setEditPlaylist(null); setShowModal(true); }}
-              className="flex items-center gap-2 rounded-2xl px-4 py-3 text-sm font-semibold btn-accent"
-            >
-              <Plus size={16} />
+    <div className="xcontent">
+      {/* hero */}
+      <div className="xherocard xrise" style={{ marginTop: 24 }}>
+        <div className="xherocard__inner">
+          <span className="xherocard__eyebrow">Self-hosted · Xtream Codes API</span>
+          <h1 className="xherocard__title">
+            Stream it raw.
+            <br />
+            <em>Download it all.</em>
+          </h1>
+          <p className="xherocard__tag">
+            Browse every Xtream Codes playlist, watch straight in your browser, and run an IDM-grade download queue
+            that never buffers.
+          </p>
+          <div className="xherocard__actions">
+            <Button variant="primary" size="lg" icon={<Plus size={18} />} onClick={() => { setEditing(null); setShowModal(true); }}>
               Add Playlist
-            </button>
+            </Button>
+            <Button variant="outline" size="lg" icon={<Tv size={18} />} onClick={() => navigate("/live")}>
+              Browse Live TV
+            </Button>
+            <span className="xherocard__count">
+              <Folder size={14} />
+              <b>{playlists.length}</b> playlists connected
+            </span>
           </div>
+        </div>
+      </div>
+
+      {/* stats */}
+      <div className="xstats" style={{ marginTop: 20 }}>
+        <StatCard icon={<Folder />} tone="volt" num={playlists.length} label="Playlists" />
+        <StatCard icon={<Download />} tone="surge" num={counts.downloading} label="Downloading" />
+        <StatCard icon={<CheckCircle2 />} tone="pos" num={counts.completed} label="Completed" />
+        <StatCard icon={<AlertTriangle />} tone="neg" num={counts.failed} label="Failed" />
+      </div>
+
+      {/* playlists */}
+      <section className="xsec">
+        <SectionHead title="Your Playlists" more="Manage in settings" onMore={() => navigate("/settings")} />
+        <div className="xcard xpl" style={{ padding: 8 }}>
+          {playlists.map((p) => (
+            <div
+              key={p.id}
+              className={"xpl__row" + (p.id === activePlaylistId ? " is-active" : "")}
+              onClick={() => setActivePlaylistId(p.id)}
+            >
+              <span className="xpl__dot" />
+              <div style={{ minWidth: 0 }}>
+                <div className="xpl__name">
+                  {p.name}
+                  {p.id === activePlaylistId ? <Badge variant="top">Active</Badge> : null}
+                  {p.sync_status === "error" ? (
+                    <Badge variant="soft" style={{ color: "var(--neg-500)" }}>
+                      Sync failed
+                    </Badge>
+                  ) : null}
+                </div>
+                <div className="xpl__url">
+                  {p.base_url} · {p.username}
+                </div>
+              </div>
+              <div className="xpl__meta" onClick={(e) => e.stopPropagation()}>
+                <span className="xpl__sync">
+                  {p.sync_status === "syncing" ? "Syncing…" : "Synced " + fmtAgo(p.last_synced_at)}
+                </span>
+                <button
+                  className={"xrowbtn" + (p.sync_status === "syncing" ? " is-spinning" : "")}
+                  onClick={() => handleSync(p.id)}
+                  disabled={p.sync_status === "syncing"}
+                  aria-label={`Sync playlist ${p.name}`}
+                >
+                  <RefreshCw />
+                </button>
+                <button
+                  className="xrowbtn"
+                  onClick={() => {
+                    setEditing(p);
+                    setShowModal(true);
+                  }}
+                  aria-label={`Edit playlist ${p.name}`}
+                >
+                  <Edit />
+                </button>
+                <button
+                  className="xrowbtn xrowbtn--danger"
+                  onClick={() => handleDelete(p.id, p.name)}
+                  aria-label={`Delete playlist ${p.name}`}
+                >
+                  <Trash2 />
+                </button>
+              </div>
+            </div>
+          ))}
+          {playlists.length === 0 && (
+            <div style={{ padding: "32px 16px", textAlign: "center", color: "var(--text-tertiary)", fontSize: 14.5 }}>
+              No playlists yet. Add one to get started.
+            </div>
+          )}
         </div>
       </section>
 
-      <div className="grid grid-cols-2 gap-4 xl:grid-cols-4">
-        <StatCard label="Playlists" value={playlists.length} icon={<Tv size={20} className="text-purple-300" />} color="bg-purple-500/20" />
-        <StatCard label="Downloading" value={activeCount} icon={<Download size={20} className="text-blue-300" />} color="bg-blue-500/20" />
-        <StatCard label="Completed" value={completedCount} icon={<Film size={20} className="text-green-300" />} color="bg-green-500/20" />
-        <StatCard label="Failed" value={failedCount} icon={<Clapperboard size={20} className="text-red-300" />} color="bg-red-500/20" />
+      {/* latest media */}
+      <div className="xgrid2" style={{ marginTop: 38 }}>
+        <LatestPanel
+          title="Latest Movies"
+          to="/movies"
+          items={latestMovies.map((m: VodStream) => ({
+            id: m.stream_id,
+            name: m.name,
+            image: m.icon,
+            sub: (m.genre || "No genre yet").toUpperCase(),
+          }))}
+        />
+        <LatestPanel
+          title="Latest Series"
+          to="/series"
+          items={latestSeries.map((s: Series) => ({
+            id: s.series_id,
+            name: s.name,
+            image: s.cover,
+            sub: s.last_modified
+              ? `UPDATED ${new Date(Number(s.last_modified) * 1000).toLocaleDateString()}${s.genre ? " · " + s.genre.toUpperCase() : ""}`
+              : (s.genre || "—").toUpperCase(),
+          }))}
+        />
       </div>
 
-      <GlassCard className="p-5 sm:p-6">
-        <div className="mb-4 flex items-center justify-between gap-4">
-          <div>
-            <p className="page-hero__eyebrow">Playlists</p>
-            <h2 className="mt-2 text-xl font-semibold text-white">Sources and sync status</h2>
-          </div>
-          <span className="hidden rounded-full border border-white/10 px-3 py-2 text-sm text-white/50 sm:inline-flex">
-            Tap any row to make it active
-          </span>
-        </div>
-        {playlists.length === 0 ? (
-          <div className="text-center py-10">
-            <Tv size={40} className="mx-auto text-white/20 mb-3" />
-            <p className="text-white/40 text-sm">No playlists yet. Add one to get started.</p>
-          </div>
-        ) : (
-          <div className="space-y-3">
-            {playlists.map((p) => (
-              <div
-                key={p.id}
-                className={`flex flex-col gap-4 rounded-[1.5rem] border p-4 transition-colors sm:flex-row sm:items-center ${
-                  p.id === activePlaylistId ? "border-emerald-300/20 bg-emerald-300/8" : "border-white/6 bg-white/[0.025] hover:bg-white/[0.045]"
-                }`}
-              >
-                <div
-                  className="flex-1 cursor-pointer"
-                  onClick={() => setActivePlaylistId(p.id)}
-                >
-                  <div className="flex flex-wrap items-center gap-2">
-                    <div className={`w-2 h-2 rounded-full ${p.is_active ? "bg-green-400" : "bg-white/20"}`} />
-                    <span className="font-medium text-white text-sm">{p.name}</span>
-                    {p.id === activePlaylistId && (
-                      <span className="badge badge-purple text-xs">Active</span>
-                    )}
-                  </div>
-                  <p className="text-xs text-white/40 mt-1 ml-4">
-                    {p.base_url} · {p.username}
-                  </p>
-                  {p.last_synced_at && (
-                    <p className="text-xs text-white/30 mt-0.5 ml-4">
-                      Last sync: {new Date(p.last_synced_at).toLocaleString()}
-                    </p>
-                  )}
-                </div>
-
-                <div className="flex items-center gap-2 self-end sm:self-auto">
-                  <button
-                    onClick={() => handleSync(p.id)}
-                    disabled={p.sync_status === "syncing"}
-                    className={`p-1.5 rounded-lg transition-colors ${
-                      p.sync_status === "syncing"
-                        ? "text-blue-400 cursor-not-allowed"
-                        : "hover:bg-white/10 text-white/40 hover:text-white"
-                    }`}
-                    title={p.sync_status === "syncing" ? "Syncing..." : "Sync"}
-                    aria-label={`Sync playlist ${p.name}`}
-                  >
-                    <RefreshCw size={14} className={p.sync_status === "syncing" ? "animate-spin" : ""} />
-                  </button>
-                  <button
-                    onClick={() => { setEditPlaylist(p); setShowModal(true); }}
-                    className="p-1.5 rounded-lg hover:bg-white/10 text-white/40 hover:text-white transition-colors"
-                    title="Edit"
-                    aria-label={`Edit playlist ${p.name}`}
-                  >
-                    <Edit size={14} />
-                  </button>
-                  <button
-                    onClick={() => handleDelete(p.id, p.name)}
-                    className="p-1.5 rounded-lg hover:bg-red-500/20 text-white/40 hover:text-red-400 transition-colors"
-                    title="Delete"
-                    aria-label={`Delete playlist ${p.name}`}
-                  >
-                    <Trash2 size={14} />
-                  </button>
-                </div>
-              </div>
+      {/* analytics readiness */}
+      <section className="xsec">
+        <SectionHead title="Analytics Readiness" />
+        <div className="xanalytics">
+          <div className="xanalytics__viz" aria-hidden="true">
+            {[40, 70, 52, 88, 64, 96, 78].map((h, i) => (
+              <div key={i} className="xanalytics__bar" style={{ height: h + "%", opacity: 0.4 + i * 0.08 }} />
             ))}
           </div>
-        )}
-      </GlassCard>
-
-      <div className="grid gap-6 xl:grid-cols-3">
-        <GlassCard className="p-5 sm:p-6 xl:col-span-2">
-          <div className="mb-4 flex items-center justify-between">
-            <div>
-              <p className="page-hero__eyebrow">Latest Media</p>
-              <h2 className="mt-2 text-xl font-semibold text-white">Newest synced picks</h2>
+          <div className="xanalytics__body">
+            <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
+              <Badge variant="new">Coming soon</Badge>
+              <span
+                style={{
+                  fontFamily: "var(--font-mono)",
+                  fontSize: 11,
+                  letterSpacing: "0.1em",
+                  textTransform: "uppercase",
+                  color: "var(--text-tertiary)",
+                }}
+              >
+                Playback history
+              </span>
             </div>
-            <Link to="/settings" className="rounded-full border border-white/10 px-3 py-2 text-sm text-white/55 transition-colors hover:bg-white/5 hover:text-white">
-              Open Settings
-            </Link>
-          </div>
-
-          <div className="grid gap-4 lg:grid-cols-2">
-            <div className="rounded-[1.5rem] border border-white/8 bg-white/[0.03] p-4">
-              <div className="mb-3 flex items-center gap-2">
-                <Film size={16} className="text-amber-300" />
-                <h3 className="text-sm font-semibold text-white">Latest Movies</h3>
-              </div>
-              <div className="space-y-3">
-                {latestMovies.length ? latestMovies.map((item) => (
-                  <div key={item.stream_id} className="flex items-center gap-3">
-                    <div className="h-12 w-10 overflow-hidden rounded-xl bg-white/5">
-                      {item.icon && <img src={item.icon} alt={item.name} className="h-full w-full object-cover" />}
-                    </div>
-                    <div className="min-w-0">
-                      <p className="truncate text-sm font-medium text-white">{item.name}</p>
-                      <p className="truncate text-xs text-white/45">{item.genre || "No genre yet"}</p>
-                    </div>
-                  </div>
-                )) : <p className="text-sm text-white/35">Select a playlist to load latest movies.</p>}
-              </div>
+            <div
+              style={{
+                fontFamily: "var(--font-sans)",
+                fontWeight: 700,
+                fontSize: 22,
+                color: "var(--text-primary)",
+                marginBottom: 8,
+              }}
+            >
+              Your watch data, visualized.
             </div>
-
-            <div className="rounded-[1.5rem] border border-white/8 bg-white/[0.03] p-4">
-              <div className="mb-3 flex items-center gap-2">
-                <Clapperboard size={16} className="text-emerald-300" />
-                <h3 className="text-sm font-semibold text-white">Latest Series</h3>
-              </div>
-              <div className="space-y-3">
-                {latestSeries.length ? latestSeries.map((item) => (
-                  <div key={item.series_id} className="flex items-center gap-3">
-                    <div className="h-12 w-10 overflow-hidden rounded-xl bg-white/5">
-                      {item.cover && <img src={item.cover} alt={item.name} className="h-full w-full object-cover" />}
-                    </div>
-                    <div className="min-w-0">
-                      <p className="truncate text-sm font-medium text-white">{item.name}</p>
-                      <p className="truncate text-xs text-white/45">{item.release_date || item.genre || "No release date yet"}</p>
-                    </div>
-                  </div>
-                )) : <p className="text-sm text-white/35">Select a playlist to load latest series.</p>}
-              </div>
-            </div>
+            <p style={{ color: "var(--text-secondary)", fontSize: 15, margin: 0, maxWidth: 520, textWrap: "pretty" }}>
+              Playback-history tracking is on the roadmap — top genres, peak streaming hours, codec breakdowns, and
+              which playlists pull their weight. Hang tight.
+            </p>
           </div>
-        </GlassCard>
+          <Link
+            to="/downloads"
+            className="xsec__more"
+            style={{ alignSelf: "center", flex: "none" }}
+          >
+            Open downloads
+            <ChevronRight size={14} />
+          </Link>
+        </div>
+      </section>
 
-        <GlassCard className="p-5 sm:p-6">
-          <p className="page-hero__eyebrow">Analytics Readiness</p>
-          <h2 className="mt-2 text-xl font-semibold text-white">What we can power now</h2>
-          <div className="mt-4 space-y-3 text-sm text-white/60">
-            <p>Available now: latest added movies, latest series, favorites, downloads, server state, and sync health.</p>
-            <p>Missing for true dashboard analytics: playback history, play counters, last watched timestamps, and popularity aggregates.</p>
-            <p>Next backend step for “Recent Watched”, “Most Watched”, and “Popular”: add a playback-events table and increment counters from the watch endpoints.</p>
-          </div>
-        </GlassCard>
-      </div>
-
-      {showModal && (
-        <PlaylistModal
-          onClose={() => setShowModal(false)}
-          onSaved={refetch}
-          existing={editPlaylist}
-        />
-      )}
+      {showModal && <PlaylistModal existing={editing} onClose={() => setShowModal(false)} onSaved={refetch} />}
     </div>
   );
 }

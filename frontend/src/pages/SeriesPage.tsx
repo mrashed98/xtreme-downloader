@@ -1,20 +1,43 @@
-import { useState, useMemo, useRef, useEffect } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
-  Search, Clapperboard, X, Download, BookmarkPlus, BookmarkCheck,
-  ChevronDown, ChevronRight, Heart, ExternalLink, Star, Users, Play, Check,
-  Eye, EyeOff,
+  Bell,
+  Check,
+  ChevronDown,
+  ChevronLeft,
+  ChevronRight,
+  Download,
+  ExternalLink,
+  Eye,
+  EyeOff,
+  Heart,
+  Layers,
+  Play,
+  Star,
+  Users,
+  X,
 } from "lucide-react";
 import { toast } from "sonner";
 import { seriesApi, favoritesApi, type Series, type Season, type Episode } from "../api/client";
 import { useAppStore, type PlayerItem } from "../store";
 import { CategorySidebar } from "../components/ContentGrid/CategorySidebar";
-import { ContentCard } from "../components/ContentGrid/ContentCard";
+import { PosterTile } from "../components/ContentGrid/PosterTile";
 import { TrackingDialog } from "../components/TrackingDialog/TrackingDialog";
+import {
+  Badge,
+  Button,
+  EmptyState,
+  IconButton,
+  Loading,
+  SearchInput,
+  Select,
+  TONE_BG,
+  toneFg,
+  toneFor,
+} from "../components/ds";
+import { LANGUAGES } from "./Movies";
 
-const LANGUAGES = ["Arabic", "English", "Turkish", "French", "Spanish"];
-
-// ─── Detail Modal ────────────────────────────────────────────────────────────
+/* ─── Detail Modal ─────────────────────────────────────────────────────────── */
 
 function SeriesDetailModal({
   series,
@@ -32,7 +55,7 @@ function SeriesDetailModal({
   const qc = useQueryClient();
   const { openQueue } = useAppStore();
   const [showTracking, setShowTracking] = useState(false);
-  const [expandedSeasons, setExpandedSeasons] = useState<Set<number>>(new Set([1]));
+  const [openSeasons, setOpenSeasons] = useState<Set<number>>(new Set([1]));
   const [downloadLanguage, setDownloadLanguage] = useState("English");
   const [downloadingEps, setDownloadingEps] = useState<Set<string>>(new Set());
   const [playingEps, setPlayingEps] = useState<Set<string>>(new Set());
@@ -48,9 +71,10 @@ function SeriesDetailModal({
   });
 
   const seasons = detail?.seasons || [];
+  const tone = toneFor(series.name);
 
   const toggleSeason = (num: number) => {
-    setExpandedSeasons((prev) => {
+    setOpenSeasons((prev) => {
       const next = new Set(prev);
       if (next.has(num)) next.delete(num);
       else next.add(num);
@@ -65,6 +89,7 @@ function SeriesDetailModal({
         language: downloadLanguage,
         episode_ids: [ep.episode_id],
       });
+      toast.success("Episode queued");
       qc.invalidateQueries({ queryKey: ["downloads"] });
     } finally {
       setDownloadingEps((prev) => {
@@ -80,18 +105,17 @@ function SeriesDetailModal({
       language: downloadLanguage,
       season_num: seasonNum,
     });
+    toast.success(`Season ${seasonNum} queued`);
     qc.invalidateQueries({ queryKey: ["downloads"] });
   };
 
   const handlePlayEpisode = async (ep: Episode, season: Season) => {
     setPlayingEps((prev) => new Set(prev).add(ep.episode_id));
     try {
-      // Build a queue of all remaining episodes in this season starting from ep
       const allEps = season.episodes || [];
       const startIdx = allEps.findIndex((e) => e.episode_id === ep.episode_id);
       const toFetch = startIdx >= 0 ? allEps.slice(startIdx) : [ep];
 
-      // Fetch watch URLs in parallel (capped to avoid flooding the backend)
       const items: PlayerItem[] = await Promise.all(
         toFetch.map(async (e) => {
           const { url, stream_type } = await seriesApi.watchEpisode(playlistId, series.series_id, e.episode_id);
@@ -110,26 +134,27 @@ function SeriesDetailModal({
     }
   };
 
+  const handlePlayFirst = () => {
+    const first = seasons[0];
+    if (first?.episodes?.length) handlePlayEpisode(first.episodes[0], first);
+  };
+
   const handleToggleMonitored = async (ep: Episode, season: Season) => {
     const newVal = !ep.monitored;
-    // Optimistic update
-    qc.setQueryData(
-      ["series-detail", playlistId, series.series_id],
-      (old: Series | undefined) => {
-        if (!old?.seasons) return old;
-        return {
-          ...old,
-          seasons: old.seasons.map((s) =>
-            s.season_num !== season.season_num ? s : {
-              ...s,
-              episodes: s.episodes.map((e) =>
-                e.episode_id === ep.episode_id ? { ...e, monitored: newVal } : e
-              ),
-            }
-          ),
-        };
-      }
-    );
+    qc.setQueryData(["series-detail", playlistId, series.series_id], (old: Series | undefined) => {
+      if (!old?.seasons) return old;
+      return {
+        ...old,
+        seasons: old.seasons.map((s) =>
+          s.season_num !== season.season_num
+            ? s
+            : {
+                ...s,
+                episodes: s.episodes.map((e) => (e.episode_id === ep.episode_id ? { ...e, monitored: newVal } : e)),
+              }
+        ),
+      };
+    });
     try {
       await seriesApi.patchEpisode(playlistId, series.series_id, ep.episode_id, { monitored: newVal });
       if (newVal) toast.success("Episode queued for download");
@@ -140,208 +165,196 @@ function SeriesDetailModal({
     }
   };
 
-  const trailerUrl = series.youtube_trailer
-    ? `https://www.youtube.com/watch?v=${series.youtube_trailer}`
-    : null;
+  const trailerUrl = series.youtube_trailer ? `https://www.youtube.com/watch?v=${series.youtube_trailer}` : null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-sm animate-fade-in">
-      <div className="glass-card w-full max-w-3xl mx-4 animate-slide-up max-h-[90vh] flex flex-col">
-        {/* Header */}
-        <div className="p-5 border-b border-white/10 flex gap-4">
-          {series.cover && (
-            <img
-              src={series.cover}
-              alt={series.name}
-              className="w-20 h-28 object-cover rounded-lg flex-shrink-0"
-              onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
-            />
-          )}
-          <div className="flex-1 min-w-0">
-            <div className="flex items-start justify-between gap-2">
-              <h2 className="text-xl font-bold text-white">{series.name}</h2>
-              <div className="flex items-center gap-2 flex-shrink-0">
-                <button
-                  onClick={onToggleFavorite}
-                  title={isFavorited ? "Remove from favorites" : "Add to favorites"}
-                  className={`p-1.5 rounded-lg transition-colors ${
-                    isFavorited ? "text-pink-400 bg-pink-500/20" : "text-white/40 hover:text-pink-400 hover:bg-white/10"
-                  }`}
-                >
-                  <Heart size={16} fill={isFavorited ? "currentColor" : "none"} />
-                </button>
-                <button onClick={onClose} className="text-white/50 hover:text-white">
-                  <X size={20} />
-                </button>
+    <div className="xoverlay" onClick={onClose}>
+      <div className="xmodal xmodal--detail" onClick={(e) => e.stopPropagation()}>
+        <div
+          className="xvod__hero"
+          style={
+            series.backdrop || series.cover
+              ? { backgroundImage: `url(${series.backdrop || series.cover})`, minHeight: 280 }
+              : { background: `radial-gradient(120% 130% at 78% 12%, ${TONE_BG[tone]}, var(--ink-1000) 64%)`, minHeight: 280 }
+          }
+        >
+          <div className="xvod__heroscrim" />
+          <button className="xmodal__close xvod__heroclose" onClick={onClose} aria-label="Close">
+            <X size={20} />
+          </button>
+          <div className="xvod__herobody">
+            <div className="xvod__poster" style={{ background: series.cover ? undefined : TONE_BG[tone] }}>
+              {series.cover ? (
+                <img src={series.cover} alt={series.name} onError={(e) => ((e.target as HTMLImageElement).style.display = "none")} />
+              ) : (
+                <span style={{ color: toneFg(tone) }}>{series.name}</span>
+              )}
+            </div>
+            <div className="xvod__headmeta">
+              <span className="xmodal__eyebrow">Series · Xtream Codes API</span>
+              <h2 className="xvod__title">{series.name}</h2>
+              <div className="xvod__badges">
+                {series.rating != null && series.rating > 0 && (
+                  <span className="xrating">
+                    <Star fill="currentColor" stroke="none" />
+                    {series.rating.toFixed(1)}
+                  </span>
+                )}
+                {series.release_date && <span className="meta">{series.release_date}</span>}
+                {series.genre && (
+                  <>
+                    <span className="sep">·</span>
+                    <span className="meta">{series.genre}</span>
+                  </>
+                )}
+                {seasons.length > 0 && <Badge variant="soft">{seasons.length} seasons</Badge>}
+                {series.episode_run_time && <Badge variant="soft">{series.episode_run_time} min/ep</Badge>}
+                {series.language && <Badge variant="soft">{series.language}</Badge>}
+                {tracking ? <Badge variant="new">Tracking</Badge> : null}
               </div>
-            </div>
-
-            {/* Meta row */}
-            <div className="flex flex-wrap items-center gap-2 mt-2">
-              {series.genre && <span className="badge badge-purple">{series.genre}</span>}
-              {series.language && <span className="badge badge-gray">{series.language}</span>}
-              {series.rating != null && series.rating > 0 && (
-                <div className="flex items-center gap-1">
-                  <Star size={11} className="text-yellow-400 fill-yellow-400" />
-                  <span className="text-sm text-yellow-400">{series.rating.toFixed(1)}</span>
-                </div>
-              )}
-              {series.release_date && (
-                <span className="text-xs text-white/30">{series.release_date}</span>
-              )}
-            </div>
-
-            {/* Plot */}
-            {series.plot && (
-              <p className="text-sm text-white/60 mt-2 line-clamp-3 leading-relaxed">{series.plot}</p>
-            )}
-
-            {/* Cast */}
-            {series.cast && (
-              <p className="text-xs text-white/40 mt-1.5 line-clamp-1">
-                <Users size={10} className="inline mr-1 opacity-60" />
-                {series.cast}
-              </p>
-            )}
-
-            {/* Director */}
-            {series.director && (
-              <p className="text-xs text-white/40 mt-0.5">
-                <span className="text-white/25">Dir:</span> {series.director}
-              </p>
-            )}
-
-            {/* Actions */}
-            <div className="flex flex-wrap items-center gap-2 mt-3">
-              <select
-                value={downloadLanguage}
-                onChange={(e) => setDownloadLanguage(e.target.value)}
-                className="glass-input text-sm py-1.5"
-              >
-                {LANGUAGES.map((l) => (
-                  <option key={l} value={l} className="bg-gray-900">{l}</option>
-                ))}
-              </select>
-
-              <button
-                onClick={() => setShowTracking(true)}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
-                  tracking
-                    ? "bg-purple-500/20 text-purple-300 border border-purple-500/30"
-                    : "btn-accent"
-                }`}
-              >
-                {tracking ? <BookmarkCheck size={14} /> : <BookmarkPlus size={14} />}
-                {tracking ? "Tracking" : "Track"}
-              </button>
-
-              {trailerUrl && (
-                <a
-                  href={trailerUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm text-red-400 bg-red-500/10 hover:bg-red-500/20 transition-colors"
-                >
-                  <ExternalLink size={14} />
-                  Trailer
-                </a>
-              )}
             </div>
           </div>
         </div>
 
-        {/* Seasons */}
-        <div className="overflow-y-auto flex-1 p-4 space-y-3">
-          {seasons.map((season: Season) => (
-            <div key={season.season_num} className="glass-card rounded-xl overflow-hidden">
-              <button
-                className="w-full flex items-center justify-between p-3 hover:bg-white/5 transition-colors"
-                onClick={() => toggleSeason(season.season_num)}
-              >
-                <div className="flex items-center gap-3">
-                  {expandedSeasons.has(season.season_num) ? (
-                    <ChevronDown size={16} className="text-white/50" />
-                  ) : (
-                    <ChevronRight size={16} className="text-white/50" />
-                  )}
-                  <span className="font-medium text-white">
-                    {season.name || `Season ${season.season_num}`}
-                  </span>
-                  <span className="text-xs text-white/40">
-                    {season.episodes?.length || 0} episodes
-                  </span>
-                  {season.air_date && (
-                    <span className="text-xs text-white/25 hidden sm:block">{season.air_date}</span>
-                  )}
-                </div>
-                <button
-                  onClick={(e) => { e.stopPropagation(); handleDownloadSeason(season.season_num); }}
-                  className="flex items-center gap-1 px-2 py-1 rounded-lg bg-white/10 hover:bg-white/15 text-white/70 hover:text-white text-xs transition-colors"
-                >
-                  <Download size={12} />
-                  All
-                </button>
-              </button>
-
-              {expandedSeasons.has(season.season_num) && (
-                <div className="border-t border-white/5">
-                  {(season.episodes || []).map((ep: Episode) => (
-                    <div
-                      key={ep.episode_id}
-                      className={`flex items-center gap-3 px-4 py-2.5 hover:bg-white/5 border-b border-white/3 last:border-0 group/ep transition-opacity ${
-                        !ep.monitored ? "opacity-40" : ""
-                      }`}
-                    >
-                      <span className="text-xs text-white/30 w-8 text-right flex-shrink-0">
-                        {ep.episode_num != null ? `E${ep.episode_num.toString().padStart(2, "0")}` : "—"}
-                      </span>
-                      <span className={`flex-1 text-sm text-white/80 truncate ${!ep.monitored ? "line-through" : ""}`}>
-                        {ep.title || `Episode ${ep.episode_num}`}
-                      </span>
-                      {ep.duration && (
-                        <span className="text-xs text-white/30 hidden sm:block">{ep.duration}</span>
-                      )}
-                      <button
-                        onClick={(e) => { e.stopPropagation(); handleToggleMonitored(ep, season); }}
-                        className={`p-1.5 rounded-lg transition-colors ${
-                          ep.monitored
-                            ? "text-purple-400 hover:text-purple-300 hover:bg-purple-500/20"
-                            : "text-white/20 hover:text-white/60 hover:bg-white/10"
-                        }`}
-                        title={ep.monitored ? "Unmonitor episode" : "Monitor episode"}
-                      >
-                        {ep.monitored ? <Eye size={12} /> : <EyeOff size={12} />}
-                      </button>
-                      <button
-                        onClick={() => handlePlayEpisode(ep, season)}
-                        disabled={playingEps.has(ep.episode_id)}
-                        className="p-1.5 rounded-lg hover:bg-purple-500/20 text-white/40 hover:text-purple-300 transition-colors disabled:opacity-50"
-                        title="Play"
-                      >
-                        {playingEps.has(ep.episode_id)
-                          ? <div className="w-3 h-3 border border-white/40 border-t-white rounded-full animate-spin" />
-                          : <Play size={12} fill="currentColor" />
-                        }
-                      </button>
-                      <button
-                        onClick={() => handleDownloadEpisode(ep)}
-                        disabled={downloadingEps.has(ep.episode_id)}
-                        className="p-1.5 rounded-lg hover:bg-white/10 text-white/40 hover:text-white transition-colors disabled:opacity-50"
-                        title="Download"
-                      >
-                        <Download size={12} />
-                      </button>
-                    </div>
-                  ))}
-                </div>
+        <div className="xvod__body">
+          <div className="xvod__actions">
+            <Button
+              variant="primary"
+              size="lg"
+              icon={<Play size={18} fill="currentColor" stroke="none" />}
+              disabled={!seasons[0]?.episodes?.length}
+              onClick={handlePlayFirst}
+            >
+              Play
+            </Button>
+            <Button variant={tracking ? "hot" : "outline"} size="lg" icon={<Bell size={18} />} onClick={() => setShowTracking(true)}>
+              {tracking ? "Tracking" : "Track series"}
+            </Button>
+            <IconButton
+              variant="glass"
+              size="lg"
+              label={isFavorited ? "Remove from favorites" : "Add to favorites"}
+              onClick={onToggleFavorite}
+              style={isFavorited ? { color: "var(--hot-500)" } : undefined}
+            >
+              <Heart size={22} fill={isFavorited ? "currentColor" : "none"} />
+            </IconButton>
+            <div className="xvod__links" style={{ alignItems: "center" }}>
+              {trailerUrl && (
+                <a className="xlinkbtn" href={trailerUrl} target="_blank" rel="noreferrer">
+                  <ExternalLink />
+                  Trailer
+                </a>
               )}
+              <span
+                style={{
+                  fontFamily: "var(--font-mono)",
+                  fontSize: 11,
+                  letterSpacing: "0.08em",
+                  textTransform: "uppercase",
+                  color: "var(--text-tertiary)",
+                }}
+              >
+                Audio
+              </span>
+              <Select value={downloadLanguage} onChange={setDownloadLanguage} options={LANGUAGES} ariaLabel="Download language" />
             </div>
-          ))}
+          </div>
+
+          {series.plot && <p className="xvod__plot">{series.plot}</p>}
+
+          <div className="xvod__credits">
+            {series.director && (
+              <div className="xvod__credit">
+                <span className="k">Director</span>
+                <span className="v">{series.director}</span>
+              </div>
+            )}
+            {series.cast && (
+              <div className="xvod__credit">
+                <span className="k">Cast</span>
+                <span className="v">{series.cast}</span>
+              </div>
+            )}
+          </div>
+
+          {seasons.map((season) => {
+            const open = openSeasons.has(season.season_num);
+            return (
+              <div key={season.season_num} className={"xseason" + (open ? " is-open" : "")}>
+                <button className="xseason__head" onClick={() => toggleSeason(season.season_num)}>
+                  <span className="xseason__num">S{String(season.season_num).padStart(2, "0")}</span>
+                  <span className="xseason__title">
+                    {season.name || `Season ${season.season_num}`}
+                    <span className="xseason__count">{season.episodes?.length || 0} episodes</span>
+                  </span>
+                  <span
+                    className="xlinkbtn"
+                    style={{ marginLeft: "auto", height: 38 }}
+                    role="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleDownloadSeason(season.season_num);
+                    }}
+                  >
+                    <Download />
+                    Season
+                  </span>
+                  <ChevronDown size={20} className="xseason__chev" />
+                </button>
+                {open && (
+                  <div className="xseason__body">
+                    {(season.episodes || []).map((ep) => (
+                      <div key={ep.episode_id} className={"xepisode" + (!ep.monitored ? " is-unmonitored" : "")}>
+                        <span className="xepisode__no">
+                          {ep.episode_num != null ? `E${String(ep.episode_num).padStart(2, "0")}` : "—"}
+                        </span>
+                        <button
+                          className="xepisode__play"
+                          onClick={() => handlePlayEpisode(ep, season)}
+                          disabled={playingEps.has(ep.episode_id)}
+                          aria-label="Play"
+                        >
+                          {playingEps.has(ep.episode_id) ? (
+                            <span className="xspinner" style={{ width: 16, height: 16, borderWidth: 2 }} />
+                          ) : (
+                            <Play fill="currentColor" stroke="none" />
+                          )}
+                        </button>
+                        <div className="xepisode__info">
+                          <div className="xepisode__title">{ep.title || `Episode ${ep.episode_num}`}</div>
+                          {ep.duration && <div className="xepisode__desc">{ep.duration}</div>}
+                        </div>
+                        <div className="xepisode__actions">
+                          <button
+                            className={"xeyebtn" + (ep.monitored ? " is-on" : "")}
+                            onClick={() => handleToggleMonitored(ep, season)}
+                            aria-label={ep.monitored ? "Unmonitor episode" : "Monitor episode"}
+                            title={ep.monitored ? "Monitored" : "Not monitored"}
+                          >
+                            {ep.monitored ? <Eye /> : <EyeOff />}
+                          </button>
+                          <button
+                            className="xrowbtn"
+                            onClick={() => handleDownloadEpisode(ep)}
+                            disabled={downloadingEps.has(ep.episode_id)}
+                            aria-label="Download episode"
+                          >
+                            <Download />
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            );
+          })}
 
           {seasons.length === 0 && (
-            <div className="text-center py-10 text-white/30">
-              <p>No episodes data. Open the series to load episodes from the provider.</p>
-            </div>
+            <p style={{ color: "var(--text-tertiary)", textAlign: "center", padding: "24px 0" }}>
+              No episodes data. Open the series to load episodes from the provider.
+            </p>
           )}
         </div>
       </div>
@@ -362,24 +375,34 @@ function SeriesDetailModal({
   );
 }
 
-// ─── Page ────────────────────────────────────────────────────────────────────
+/* ─── Page ─────────────────────────────────────────────────────────────────── */
+
+const RATINGS: [string, string][] = [
+  ["0", "Any rating"],
+  ["5", "5+"],
+  ["6", "6+"],
+  ["7", "7+"],
+  ["8", "8+"],
+];
 
 export function SeriesPage() {
   const { activePlaylistId } = useAppStore();
   const qc = useQueryClient();
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [search, setSearch] = useState("");
-  const [language, setLanguage] = useState("");
-  const [genre, setGenre] = useState("");
+  const [language, setLanguage] = useState("all");
+  const [genre, setGenre] = useState("all");
   const [selectedActors, setSelectedActors] = useState<string[]>([]);
   const [actorSearch, setActorSearch] = useState("");
   const [actorOpen, setActorOpen] = useState(false);
   const actorRef = useRef<HTMLDivElement>(null);
-  const [ratingMin, setRatingMin] = useState<number | undefined>();
+  const [ratingMin, setRatingMin] = useState("0");
   const [favoritesOnly, setFavoritesOnly] = useState(false);
   const [selectedSeries, setSelectedSeries] = useState<Series | null>(null);
   const [page, setPage] = useState(0);
   const limit = 60;
+
+  const resetPage = () => setPage(0);
 
   useEffect(() => {
     if (!actorOpen) return;
@@ -416,10 +439,10 @@ export function SeriesPage() {
         category_id: selectedCategory === "__latest__" ? undefined : selectedCategory || undefined,
         latest: selectedCategory === "__latest__",
         search: search || undefined,
-        language: language || undefined,
-        genre: genre || undefined,
+        language: language === "all" ? undefined : language,
+        genre: genre === "all" ? undefined : genre,
         cast: selectedActors.length ? selectedActors.join(",") : undefined,
-        rating_min: ratingMin,
+        rating_min: ratingMin === "0" ? undefined : Number(ratingMin),
         limit,
         offset: page * limit,
       }),
@@ -433,11 +456,7 @@ export function SeriesPage() {
     enabled: !!activePlaylistId,
   });
 
-  const favoritedIds = useMemo(
-    () => new Set(favorites.map((f) => f.item_id)),
-    [favorites],
-  );
-
+  const favoritedIds = useMemo(() => new Set(favorites.map((f) => f.item_id)), [favorites]);
   const favIds = favorites.map((f) => f.item_id);
 
   const { data: favSeries = [], isLoading: favLoading } = useQuery({
@@ -476,100 +495,89 @@ export function SeriesPage() {
 
   if (!activePlaylistId) {
     return (
-      <div className="flex items-center justify-center h-full text-white/40">
-        <div className="text-center">
-          <Clapperboard size={48} className="mx-auto mb-3 opacity-30" />
-          <p>Select a playlist from the dashboard first</p>
-        </div>
+      <div className="xcontent">
+        <EmptyState icon={<Layers />} title="Select a playlist first" sub="Set an active playlist to browse series." />
       </div>
     );
   }
 
+  const filteredActors = actorSearch
+    ? actors.filter((a) => a.toLowerCase().includes(actorSearch.toLowerCase()))
+    : actors;
+
   return (
-    <div className="page-shell flex flex-1 min-h-0 overflow-y-auto flex-col lg:overflow-hidden lg:grid lg:grid-cols-[260px_minmax(0,1fr)] lg:gap-6">
-      <CategorySidebar
-        categories={seriesCategories}
-        selected={selectedCategory}
-        onSelect={(id) => { setSelectedCategory(id); setPage(0); }}
-      />
-
-      <div className="mt-5 flex min-w-0 flex-col lg:min-h-0 lg:mt-0">
-        <section className="glass-card page-hero">
-          <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
-            <div>
-              <p className="page-hero__eyebrow">Series</p>
-              <h1 className="page-hero__title">Track episodes with more signal and less clutter.</h1>
-              <p className="page-hero__body">
-                Follow seasons, favorite shows, and manage monitored episodes in a layout that stays usable on smaller screens without losing depth on desktop.
-              </p>
+    <div className="xcontent">
+      <div className="xpagehead">
+        <div className="xpagehead__eyebrow">Binge · Auto-download</div>
+        <h1 className="xpagehead__title">Series</h1>
+      </div>
+      <div className="xbrowse">
+        <CategorySidebar
+          categories={seriesCategories}
+          selected={selectedCategory}
+          onSelect={(id) => {
+            setSelectedCategory(id);
+            resetPage();
+          }}
+          allLabel="All Series"
+        />
+        <div className="xbrowse__main">
+          <div className="xfilter">
+            <div className="xfilter__search">
+              <SearchInput
+                placeholder="Search series…"
+                value={search}
+                onChange={(e) => {
+                  setSearch(e.target.value);
+                  resetPage();
+                }}
+              />
             </div>
-            <div className="page-actions">
-              <span className="rounded-full border border-white/10 px-3 py-2 text-sm text-white/55">
-                {displayedSeries.length} results
-              </span>
-            </div>
-          </div>
-        </section>
 
-        <div className="mb-4 mt-5 flex flex-wrap gap-2">
-          <div className="relative flex-1 min-w-48">
-            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-white/40" />
-            <input
-              className="w-full glass-input pl-11 text-sm"
-              placeholder="Search series..."
-              value={search}
-              onChange={(e) => { setSearch(e.target.value); setPage(0); }}
+            <Select
+              value={language}
+              onChange={(v) => {
+                setLanguage(v);
+                resetPage();
+              }}
+              options={[{ value: "all", label: "All languages" }, ...LANGUAGES]}
+              ariaLabel="Language"
             />
-          </div>
 
-          <select
-            className="glass-input text-sm"
-            value={language}
-            onChange={(e) => { setLanguage(e.target.value); setPage(0); }}
-          >
-            <option value="">All languages</option>
-            {LANGUAGES.map((l) => (
-              <option key={l} value={l} className="bg-gray-900">{l}</option>
-            ))}
-          </select>
+            <Select
+              value={genre}
+              onChange={(v) => {
+                setGenre(v);
+                resetPage();
+              }}
+              options={[{ value: "all", label: "All genres" }, ...genres]}
+              ariaLabel="Genre"
+            />
 
-          <select
-            className="glass-input text-sm"
-            value={genre}
-            onChange={(e) => { setGenre(e.target.value); setPage(0); }}
-          >
-            <option value="">All genres</option>
-            {genres.map((g) => (
-              <option key={g} value={g} className="bg-gray-900">{g}</option>
-            ))}
-          </select>
-
-          <div className="relative" ref={actorRef}>
-            <button
-              onClick={() => setActorOpen((v) => !v)}
-              className={`glass-input text-sm flex items-center gap-2 min-w-36 ${
-                selectedActors.length ? "text-white" : "text-white/50"
-              }`}
-            >
-              <Users size={13} className="flex-shrink-0" />
-              <span className="truncate">
+            <div style={{ position: "relative" }} ref={actorRef}>
+              <button
+                className={"xfav-toggle" + (selectedActors.length ? " is-on-volt" : "")}
+                onClick={() => setActorOpen((v) => !v)}
+              >
+                <Users />
                 {selectedActors.length === 0
-                  ? "All actors"
+                  ? "Actors"
                   : selectedActors.length === 1
                   ? selectedActors[0]
                   : `${selectedActors.length} actors`}
-              </span>
-              <ChevronDown size={12} className="ml-auto flex-shrink-0" />
-            </button>
+                <ChevronDown size={14} />
+              </button>
 
-            {actorOpen && (
-              <div className="absolute top-full mt-1 left-0 z-30 w-64 glass-card rounded-xl shadow-xl border border-white/10 overflow-hidden">
-                <div className="p-2 border-b border-white/10 space-y-1.5">
-                  <div className="relative">
-                    <Search size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-white/30" />
+              {actorOpen && (
+                <div
+                  className="xlangsel__pop"
+                  style={{ top: "calc(100% + 8px)", bottom: "auto", minWidth: 240, maxHeight: 300, overflowY: "auto" }}
+                >
+                  <div style={{ padding: "4px 4px 8px" }}>
                     <input
-                      className="w-full glass-input pl-10 py-1.5 text-xs"
-                      placeholder="Search actors..."
+                      className="xinput"
+                      style={{ height: 40, fontSize: 14 }}
+                      placeholder="Search actors…"
                       value={actorSearch}
                       onChange={(e) => setActorSearch(e.target.value)}
                       autoFocus
@@ -577,127 +585,106 @@ export function SeriesPage() {
                   </div>
                   {selectedActors.length > 0 && (
                     <button
-                      onClick={() => { setSelectedActors([]); setPage(0); }}
-                      className="text-xs text-white/40 hover:text-white px-1"
+                      className="xlangsel__opt"
+                      style={{ color: "var(--hot-500)" }}
+                      onClick={() => {
+                        setSelectedActors([]);
+                        resetPage();
+                      }}
                     >
                       Clear all ({selectedActors.length})
                     </button>
                   )}
-                </div>
-                <div className="max-h-60 overflow-y-auto">
-                  {(actorSearch
-                    ? actors.filter((a) => a.toLowerCase().includes(actorSearch.toLowerCase()))
-                    : actors
-                  ).map((actor) => (
-                    <button
-                      key={actor}
-                      onClick={() => {
-                        setSelectedActors((prev) =>
-                          prev.includes(actor) ? prev.filter((a) => a !== actor) : [...prev, actor]
-                        );
-                        setPage(0);
-                      }}
-                      className={`w-full flex items-center gap-2.5 px-3 py-2 text-sm text-left transition-colors hover:bg-white/5 ${
-                        selectedActors.includes(actor) ? "text-purple-300" : "text-white/70"
-                      }`}
-                    >
-                      <div className={`w-4 h-4 rounded border flex-shrink-0 flex items-center justify-center transition-colors ${
-                        selectedActors.includes(actor)
-                          ? "bg-purple-500 border-purple-500"
-                          : "border-white/20"
-                      }`}>
-                        {selectedActors.includes(actor) && <Check size={10} className="text-white" />}
-                      </div>
-                      <span className="truncate">{actor}</span>
-                    </button>
-                  ))}
-                  {actors.filter((a) => a.toLowerCase().includes(actorSearch.toLowerCase())).length === 0 && actorSearch && (
-                    <p className="text-xs text-white/30 text-center py-4">No actors found</p>
+                  {filteredActors.map((actor) => {
+                    const on = selectedActors.includes(actor);
+                    return (
+                      <button
+                        key={actor}
+                        className={"xlangsel__opt" + (on ? " is-on" : "")}
+                        onClick={() => {
+                          setSelectedActors((prev) => (on ? prev.filter((a) => a !== actor) : [...prev, actor]));
+                          resetPage();
+                        }}
+                      >
+                        {on ? <Check /> : <span style={{ width: 15 }} />}
+                        {actor}
+                      </button>
+                    );
+                  })}
+                  {filteredActors.length === 0 && actorSearch && (
+                    <p style={{ fontSize: 13, color: "var(--text-tertiary)", textAlign: "center", padding: "12px 0", margin: 0 }}>
+                      No actors found
+                    </p>
                   )}
                 </div>
-              </div>
-            )}
-          </div>
-
-          <select
-            className="glass-input text-sm"
-            value={ratingMin || ""}
-            onChange={(e) => { setRatingMin(e.target.value ? Number(e.target.value) : undefined); setPage(0); }}
-          >
-            <option value="">Any rating</option>
-            <option value="5">5+</option>
-            <option value="6">6+</option>
-            <option value="7">7+</option>
-            <option value="8">8+</option>
-          </select>
-
-          <button
-            onClick={() => setFavoritesOnly((v) => !v)}
-            title="Show favorites only"
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm transition-colors ${
-              favoritesOnly
-                ? "bg-pink-500/20 text-pink-400 border border-pink-500/30"
-                : "glass-input text-white/50 hover:text-white"
-            }`}
-          >
-            <Heart size={13} fill={favoritesOnly ? "currentColor" : "none"} />
-            Favorites
-          </button>
-        </div>
-
-        {isLoadingDisplay ? (
-          <div className="flex items-center justify-center py-20">
-            <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-purple-500" />
-          </div>
-        ) : (
-          <>
-            <div className="lg:overflow-y-auto lg:flex-1 lg:min-h-0 nav-clearance">
-              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3">
-                {displayedSeries.map((s) => (
-                  <ContentCard
-                    key={s.series_id}
-                    title={s.name}
-                    subtitle={s.genre || undefined}
-                    image={s.cover}
-                    rating={s.rating}
-                    badge={s.language || undefined}
-                    isFavorited={favoritedIds.has(s.series_id)}
-                    onFavorite={() => handleToggleFavorite(s)}
-                    onClick={() => setSelectedSeries(s)}
-                  />
-                ))}
-                {displayedSeries.length === 0 && (
-                  <div className="col-span-full flex items-center justify-center py-20 text-white/30">
-                    <div className="text-center">
-                      <Clapperboard size={40} className="mx-auto mb-2 opacity-40" />
-                      <p>{favoritesOnly ? "No favorites yet" : "No series found"}</p>
-                    </div>
-                  </div>
-                )}
-              </div>
+              )}
             </div>
 
-            {!favoritesOnly && (seriesList.length === limit || page > 0) && (
-              <div className="flex items-center justify-center gap-3 mt-4">
-                <button
-                  disabled={page === 0}
-                  onClick={() => setPage((p) => p - 1)}
-                  className="px-4 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-sm text-white/70 disabled:opacity-30 transition-colors"
-                >
-                  Previous
-                </button>
-                <span className="text-sm text-white/40">Page {page + 1}</span>
-                <button
-                  disabled={seriesList.length < limit}
-                  onClick={() => setPage((p) => p + 1)}
-                  className="px-4 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-sm text-white/70 disabled:opacity-30 transition-colors"
-                >
-                  Next
-                </button>
+            <Select
+              value={ratingMin}
+              onChange={(v) => {
+                setRatingMin(v);
+                resetPage();
+              }}
+              options={RATINGS.map(([value, label]) => ({ value, label }))}
+              ariaLabel="Minimum rating"
+            />
+
+            <button className={"xfav-toggle" + (favoritesOnly ? " is-on" : "")} onClick={() => setFavoritesOnly((v) => !v)}>
+              <Heart fill={favoritesOnly ? "currentColor" : "none"} />
+              Favorites
+            </button>
+          </div>
+
+          {isLoadingDisplay ? (
+            <Loading />
+          ) : displayedSeries.length === 0 ? (
+            <EmptyState
+              icon={<Layers />}
+              title={favoritesOnly ? "No favorites yet" : "No series found"}
+              sub="Nothing here yet. Go find something worth the bandwidth."
+            />
+          ) : (
+            <>
+              <div className="xposgrid">
+                {displayedSeries.map((s) => (
+                  <PosterTile
+                    key={s.series_id}
+                    title={s.name}
+                    eyebrow={(s.genre || s.language || "Series").toUpperCase()}
+                    image={s.cover}
+                    rating={s.rating}
+                    isFavorited={favoritedIds.has(s.series_id)}
+                    onFavorite={() => handleToggleFavorite(s)}
+                    onOpen={() => setSelectedSeries(s)}
+                  />
+                ))}
               </div>
-            )}
-          </>
-        )}
+
+              {!favoritesOnly && (seriesList.length === limit || page > 0) && (
+                <div className="xpager">
+                  <Button
+                    variant="outline"
+                    disabled={page === 0}
+                    icon={<ChevronLeft size={16} />}
+                    onClick={() => setPage((p) => Math.max(0, p - 1))}
+                  >
+                    Previous
+                  </Button>
+                  <span className="xpager__info">Page {page + 1}</span>
+                  <Button
+                    variant="outline"
+                    disabled={seriesList.length < limit}
+                    iconRight={<ChevronRight size={16} />}
+                    onClick={() => setPage((p) => p + 1)}
+                  >
+                    Next
+                  </Button>
+                </div>
+              )}
+            </>
+          )}
+        </div>
       </div>
 
       {selectedSeries && (

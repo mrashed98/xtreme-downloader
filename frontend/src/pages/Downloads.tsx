@@ -1,6 +1,17 @@
-import { useState, useEffect, useRef } from "react";
-import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
-import { Pause, Play, Trash2, Download, Settings, X, RotateCcw } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  AlertTriangle,
+  Check,
+  ChevronDown,
+  Download as DownloadIcon,
+  Gauge,
+  Pause,
+  Play,
+  RotateCcw,
+  Settings,
+  Trash2,
+} from "lucide-react";
 import { toast } from "sonner";
 import {
   downloadsApi,
@@ -11,172 +22,44 @@ import {
   type DownloadSettings,
 } from "../api/client";
 import { useAppStore } from "../store";
-import { GlassCard } from "../components/Layout/GlassCard";
+import { EmptyState, ProgressBar, TONE_BG, Tabs, toneFg, toneFor } from "../components/ds";
 
-const STATUS_COLORS: Record<string, string> = {
-  queued: "badge-gray",
-  downloading: "badge-purple",
-  paused: "badge-yellow",
-  completed: "badge-green",
-  failed: "badge-red",
-  cancelled: "badge-gray",
+const GRAPH_LEN = 40;
+
+const STATUS_LABEL: Record<string, string> = {
+  downloading: "Downloading",
+  queued: "Queued",
+  paused: "Paused",
+  completed: "Done",
+  failed: "Failed",
+  cancelled: "Cancelled",
 };
 
-const TABS = ["all", "downloading", "completed", "failed"] as const;
-type Tab = (typeof TABS)[number];
-
-type SpeedUnit = "unlimited" | "kbps" | "mbps";
-
-function bpsToDisplay(bps: number): { value: number; unit: SpeedUnit } {
-  if (bps === 0) return { value: 0, unit: "unlimited" };
-  if (bps >= 1024 * 1024) return { value: Math.round(bps / (1024 * 1024)), unit: "mbps" };
-  return { value: Math.round(bps / 1024), unit: "kbps" };
-}
-
-function displayToBps(value: number, unit: SpeedUnit): number {
-  if (unit === "unlimited") return 0;
-  if (unit === "mbps") return value * 1024 * 1024;
-  return value * 1024;
-}
-
-function SettingsPanel({ onClose }: { onClose: () => void }) {
-  const qc = useQueryClient();
-  const [saved, setSaved] = useState(false);
-
-  const { data: remoteSettings } = useQuery({
-    queryKey: ["settings"],
-    queryFn: settingsApi.get,
-  });
-
-  const [concurrent, setConcurrent] = useState(3);
-  const [chunks, setChunks] = useState(1);
-  const [speedUnit, setSpeedUnit] = useState<SpeedUnit>("unlimited");
-  const [speedValue, setSpeedValue] = useState(0);
-  const [maxRetries, setMaxRetries] = useState(2);
-
-  // Sync local state when remote data loads
-  useEffect(() => {
-    if (remoteSettings) {
-      setConcurrent(remoteSettings.max_concurrent_downloads);
-      setChunks(1);
-      const { value, unit } = bpsToDisplay(remoteSettings.speed_limit_bps);
-      setSpeedUnit(unit);
-      setSpeedValue(value);
-      setMaxRetries(remoteSettings.max_retries ?? 2);
-    }
-  }, [remoteSettings]);
-
-  const mutation = useMutation({
-    mutationFn: (data: DownloadSettings) => settingsApi.update(data),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["settings"] });
-      setSaved(true);
-      setTimeout(() => setSaved(false), 2000);
-    },
-  });
-
-  const handleSave = () => {
-    mutation.mutate({
-      max_concurrent_downloads: concurrent,
-      download_chunks: chunks,
-      speed_limit_bps: displayToBps(speedValue, speedUnit),
-      max_retries: maxRetries,
-    });
-  };
-
+function StatusBadge({ status }: { status: string }) {
   return (
-    <div className="glass-card p-5 space-y-5 animate-slide-up">
-      <div className="flex items-center justify-between">
-        <h2 className="text-sm font-semibold text-white/80 flex items-center gap-2">
-          <Settings size={15} className="text-purple-400" />
-          Download Settings
-        </h2>
-        <button
-          onClick={onClose}
-          className="p-1 rounded-lg hover:bg-white/10 text-white/40 hover:text-white transition-colors"
-        >
-          <X size={14} />
-        </button>
-      </div>
-
-      {/* Concurrent Downloads */}
-      <div className="space-y-2">
-        <div className="flex items-center justify-between text-xs">
-          <span className="text-white/60">Concurrent Downloads</span>
-          <span className="text-white font-medium tabular-nums">{concurrent} / 10</span>
-        </div>
-        <input
-          type="range"
-          min={1}
-          max={10}
-          value={concurrent}
-          onChange={(e) => setConcurrent(Number(e.target.value))}
-          className="w-full accent-purple-500 cursor-pointer"
-        />
-      </div>
-
-      {/* Max Retries */}
-      <div className="space-y-2">
-        <div className="flex items-center justify-between text-xs">
-          <span className="text-white/60">Max Retries</span>
-          <span className="text-white font-medium tabular-nums">{maxRetries} / 5</span>
-        </div>
-        <input
-          type="range"
-          min={0}
-          max={5}
-          value={maxRetries}
-          onChange={(e) => setMaxRetries(Number(e.target.value))}
-          className="w-full accent-purple-500 cursor-pointer"
-        />
-      </div>
-
-      {/* Speed Limit */}
-      <div className="space-y-2">
-        <span className="text-xs text-white/60">Speed Limit</span>
-        <div className="flex items-center gap-2">
-          <select
-            value={speedUnit}
-            onChange={(e) => {
-              const u = e.target.value as SpeedUnit;
-              setSpeedUnit(u);
-              if (u === "unlimited") setSpeedValue(0);
-              else if (speedValue === 0) setSpeedValue(u === "mbps" ? 10 : 1024);
-            }}
-            className="bg-white/10 border border-white/10 rounded-lg px-2 py-1.5 text-xs text-white focus:outline-none focus:border-purple-500"
-          >
-            <option value="unlimited">Unlimited</option>
-            <option value="kbps">KB/s</option>
-            <option value="mbps">MB/s</option>
-          </select>
-          {speedUnit !== "unlimited" && (
-            <input
-              type="number"
-              min={1}
-              value={speedValue}
-              onChange={(e) => setSpeedValue(Math.max(1, Number(e.target.value)))}
-              className="w-24 bg-white/10 border border-white/10 rounded-lg px-2 py-1.5 text-xs text-white focus:outline-none focus:border-purple-500 tabular-nums"
-            />
-          )}
-          {speedUnit === "unlimited" && (
-            <span className="text-xs text-white/30">No limit</span>
-          )}
-        </div>
-      </div>
-
-      {/* Save button */}
-      <div className="flex items-center justify-end gap-3 pt-1">
-        {saved && <span className="text-xs text-green-400">Saved!</span>}
-        <button
-          onClick={handleSave}
-          disabled={mutation.isPending}
-          className="btn-accent px-4 py-1.5 text-xs rounded-lg disabled:opacity-50"
-        >
-          {mutation.isPending ? "Saving…" : "Save"}
-        </button>
-      </div>
-    </div>
+    <span className={"xst xst--" + status}>
+      <span className="d" />
+      {STATUS_LABEL[status] || status}
+    </span>
   );
+}
+
+function Eq() {
+  return (
+    <span className="xeq" aria-hidden="true">
+      {[8, 13, 6, 11].map((h, i) => (
+        <i key={i} style={{ height: h }} />
+      ))}
+    </span>
+  );
+}
+
+function fmtEta(seconds: number): string {
+  if (!Number.isFinite(seconds) || seconds <= 0) return "—";
+  const s = Math.round(seconds);
+  if (s < 60) return `${s}s`;
+  if (s < 3600) return `${Math.floor(s / 60)}m ${s % 60}s`;
+  return `${Math.floor(s / 3600)}h ${Math.floor((s % 3600) / 60)}m`;
 }
 
 function DownloadRow({
@@ -192,114 +75,238 @@ function DownloadRow({
   onRetry: (id: number) => void;
   onDelete: (id: number) => void;
 }) {
-  const progress = dl.progress_pct;
+  const pct = dl.progress_pct;
+  const active = dl.status === "downloading";
   const canRetry = dl.status === "failed" || dl.status === "cancelled";
+  const tone = toneFor(dl.title);
+  const eta = active && dl.speed_bps > 0 ? (dl.total_bytes - dl.downloaded_bytes) / dl.speed_bps : null;
 
   return (
-    <div className="glass-card animate-slide-up space-y-2 p-4">
-      <div className="flex items-start justify-between gap-3">
-        <div className="flex-1 min-w-0">
-          <p className="text-sm font-medium text-white/90 truncate">{dl.title}</p>
-          <div className="flex flex-wrap items-center gap-2 mt-1">
-            <span className={`badge ${STATUS_COLORS[dl.status] || "badge-gray"}`}>
-              {dl.status}
-            </span>
-            <span className="text-xs text-white/40">{dl.content_type}</span>
-            {dl.language && <span className="text-xs text-white/30">{dl.language}</span>}
-          </div>
+    <div className="xdlrow">
+      <div className="xdlrow__poster" style={{ background: TONE_BG[tone] }}>
+        <span style={{ color: toneFg(tone) }}>{dl.title.split(/[\s—·-]+/)[0]}</span>
+      </div>
+      <div className="xdlrow__mid">
+        <div className="xdlrow__toprow">
+          <span className="xdlrow__title">{dl.title}</span>
+          <StatusBadge status={dl.status} />
+          {active ? <Eq /> : null}
         </div>
 
-        <div className="flex items-center gap-1 flex-shrink-0">
-          {dl.status === "downloading" && (
-            <button
-              onClick={() => onPause(dl.id)}
-              className="p-2 min-w-[2.75rem] min-h-[2.75rem] flex items-center justify-center rounded-lg hover:bg-white/10 text-white/50 hover:text-white transition-colors"
-              title="Pause"
-              aria-label="Pause download"
-            >
-              <Pause size={16} />
-            </button>
-          )}
-          {dl.status === "paused" && (
-            <button
-              onClick={() => onResume(dl.id)}
-              className="p-2 min-w-[2.75rem] min-h-[2.75rem] flex items-center justify-center rounded-lg hover:bg-white/10 text-white/50 hover:text-white transition-colors"
-              title="Resume"
-              aria-label="Resume download"
-            >
-              <Play size={16} />
-            </button>
-          )}
-          {canRetry && (
-            <button
-              onClick={() => onRetry(dl.id)}
-              className="p-2 min-w-[2.75rem] min-h-[2.75rem] flex items-center justify-center rounded-lg hover:bg-purple-500/20 text-white/50 hover:text-purple-300 transition-colors"
-              title="Retry"
-              aria-label="Retry download"
-            >
-              <RotateCcw size={16} />
-            </button>
-          )}
-          <button
-            onClick={() => onDelete(dl.id)}
-            className="p-2 min-w-[2.75rem] min-h-[2.75rem] flex items-center justify-center rounded-lg hover:bg-red-500/20 text-white/40 hover:text-red-400 transition-colors"
-            title="Delete"
-            aria-label="Delete download"
-          >
-            <Trash2 size={16} />
-          </button>
-        </div>
+        {dl.status === "completed" ? (
+          <div className="xdlrow__metarow">
+            <span style={{ color: "var(--text-secondary)" }}>
+              {dl.content_type}
+              {dl.language ? ` · ${dl.language}` : ""}
+            </span>
+            {dl.total_bytes > 0 && <span>{formatBytes(dl.total_bytes)}</span>}
+            {dl.file_path && (
+              <span className="path">
+                <Check size={13} /> {dl.file_path}
+              </span>
+            )}
+          </div>
+        ) : dl.status === "failed" || dl.status === "cancelled" ? (
+          <div className="xdlrow__metarow">
+            <span style={{ color: "var(--text-secondary)" }}>
+              {dl.content_type}
+              {dl.language ? ` · ${dl.language}` : ""}
+            </span>
+            {dl.error_message && (
+              <span className="err">
+                <AlertTriangle size={13} />
+                {dl.error_message}
+              </span>
+            )}
+          </div>
+        ) : (
+          <>
+            <div className="xdlrow__progwrap">
+              <ProgressBar value={Math.min(pct, 100)} variant={dl.status === "paused" ? "hot" : "volt"} height={6} />
+            </div>
+            <div className="xdlrow__metarow">
+              <span className="pct">{pct.toFixed(0)}%</span>
+              <span>
+                {formatBytes(dl.downloaded_bytes)} / {dl.total_bytes > 0 ? formatBytes(dl.total_bytes) : "?"}
+              </span>
+              {active && dl.speed_bps > 0 && (
+                <span className="sp">
+                  <Gauge size={13} /> {formatSpeed(dl.speed_bps)}
+                </span>
+              )}
+              {eta != null && <span>ETA {fmtEta(eta)}</span>}
+              <span style={{ color: "var(--text-tertiary)" }}>
+                {dl.content_type}
+                {dl.language ? ` · ${dl.language}` : ""}
+              </span>
+            </div>
+          </>
+        )}
       </div>
 
-      {/* Progress */}
-      {(dl.status === "downloading" || dl.status === "paused" || (dl.status === "completed" && progress > 0)) && (
-        <>
-          <div className="progress-bar">
-            <div
-              className="progress-bar-fill"
-              style={{ width: `${Math.min(progress, 100)}%` }}
+      <div className="xdlrow__actions">
+        {dl.status === "downloading" && (
+          <button className="xrowbtn" onClick={() => onPause(dl.id)} aria-label="Pause download">
+            <Pause />
+          </button>
+        )}
+        {dl.status === "paused" && (
+          <button className="xrowbtn" onClick={() => onResume(dl.id)} aria-label="Resume download">
+            <Play fill="currentColor" stroke="none" />
+          </button>
+        )}
+        {canRetry && (
+          <button className="xrowbtn xrowbtn--accent" onClick={() => onRetry(dl.id)} aria-label="Retry download">
+            <RotateCcw />
+          </button>
+        )}
+        <button className="xrowbtn xrowbtn--danger" onClick={() => onDelete(dl.id)} aria-label="Delete download">
+          <Trash2 />
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function SpeedGraph({ hist }: { hist: number[] }) {
+  const max = Math.max(1, ...hist);
+  return (
+    <div className="xgraph">
+      {hist.map((v, i) => (
+        <div
+          key={i}
+          className={"xgraph__bar" + (i === hist.length - 1 ? " hot" : "")}
+          style={{ height: Math.max(3, (v / max) * 100) + "%" }}
+        />
+      ))}
+      <div className="xgraph__axis">
+        <span>-{GRAPH_LEN}s</span>
+        <span>live throughput</span>
+        <span>now</span>
+      </div>
+    </div>
+  );
+}
+
+const SPEED_PRESETS: [number, string][] = [
+  [0, "Max"],
+  [1024 * 1024, "1MB/s"],
+  [2 * 1024 * 1024, "2MB/s"],
+  [5 * 1024 * 1024, "5MB/s"],
+  [10 * 1024 * 1024, "10MB/s"],
+];
+
+export function speedLabel(bps: number): string {
+  const preset = SPEED_PRESETS.find(([v]) => v === bps);
+  if (preset) return preset[1];
+  return `${formatBytes(bps)}/s`;
+}
+
+function DownloadEngine() {
+  const qc = useQueryClient();
+  const [open, setOpen] = useState(false);
+  const { data: remote } = useQuery({ queryKey: ["settings"], queryFn: settingsApi.get });
+  const [draft, setDraft] = useState<DownloadSettings | null>(null);
+  const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    if (remote && !draft) setDraft(remote);
+  }, [remote, draft]);
+
+  const mutation = useMutation({
+    mutationFn: (data: DownloadSettings) => settingsApi.update(data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["settings"] }),
+    onError: () => toast.error("Failed to save engine settings"),
+  });
+
+  const set = (patch: Partial<DownloadSettings>) => {
+    setDraft((d) => {
+      if (!d) return d;
+      const next = { ...d, ...patch };
+      if (saveTimer.current) clearTimeout(saveTimer.current);
+      saveTimer.current = setTimeout(() => mutation.mutate(next), 600);
+      return next;
+    });
+  };
+
+  const s = draft;
+  const customSpeed = s && !SPEED_PRESETS.some(([v]) => v === s.speed_limit_bps);
+
+  return (
+    <div className={"xdlsettings" + (open ? " is-open" : "")}>
+      <button className="xdlsettings__head" onClick={() => setOpen((o) => !o)} aria-expanded={open}>
+        <Settings size={19} style={{ color: "var(--text-tertiary)" }} />
+        <span className="xdlsettings__title">Download Engine</span>
+        <span className="xdlsettings__sum">
+          {s ? `${s.max_concurrent_downloads} concurrent · ${speedLabel(s.speed_limit_bps)}` : "…"}
+        </span>
+        <ChevronDown size={20} className="xdlsettings__chev" />
+      </button>
+      {open && s && (
+        <div className="xdlsettings__body">
+          <div className="xctrl">
+            <div className="xctrl__label">
+              <span>Concurrent downloads</span>
+              <span className="xctrl__val">{s.max_concurrent_downloads}</span>
+            </div>
+            <input
+              className="xrange"
+              type="range"
+              min={1}
+              max={10}
+              value={s.max_concurrent_downloads}
+              onChange={(e) => set({ max_concurrent_downloads: Number(e.target.value) })}
             />
           </div>
-          <div className="flex items-center justify-between text-xs text-white/40">
-            <span>
-              {formatBytes(dl.downloaded_bytes)} / {dl.total_bytes > 0 ? formatBytes(dl.total_bytes) : "?"}
-            </span>
-            <div className="flex items-center gap-3">
-              {dl.status === "downloading" && dl.speed_bps > 0 && (
-                <span className="text-purple-400">{formatSpeed(dl.speed_bps)}</span>
-              )}
-              <span>{progress.toFixed(1)}%</span>
+          <div className="xctrl">
+            <div className="xctrl__label">
+              <span>Max retries</span>
+              <span className="xctrl__val">{s.max_retries}</span>
+            </div>
+            <input
+              className="xrange"
+              type="range"
+              min={0}
+              max={5}
+              value={s.max_retries}
+              onChange={(e) => set({ max_retries: Number(e.target.value) })}
+            />
+          </div>
+          <div className="xctrl">
+            <div className="xctrl__label">
+              <span>Speed limit</span>
+            </div>
+            <div className="xseg">
+              {SPEED_PRESETS.map(([v, l]) => (
+                <button key={v} className={s.speed_limit_bps === v ? "is-on" : ""} onClick={() => set({ speed_limit_bps: v })}>
+                  {l}
+                </button>
+              ))}
+              {customSpeed && <button className="is-on">{speedLabel(s.speed_limit_bps)}</button>}
             </div>
           </div>
-        </>
-      )}
-
-      {dl.status === "failed" && dl.error_message && (
-        <p className="text-xs text-red-400/80 truncate">{dl.error_message}</p>
-      )}
-
-      {dl.file_path && dl.status === "completed" && (
-        <p className="text-xs text-white/30 truncate">{dl.file_path}</p>
+        </div>
       )}
     </div>
   );
 }
 
+const TABS = ["all", "active", "completed", "failed"] as const;
+type Tab = (typeof TABS)[number];
+
 export function Downloads() {
   const qc = useQueryClient();
   const setActiveDownloadCount = useAppStore((s) => s.setActiveDownloadCount);
   const [tab, setTab] = useState<Tab>("all");
-  const [showSettings, setShowSettings] = useState(false);
+  const [speedHist, setSpeedHist] = useState<number[]>(() => Array(GRAPH_LEN).fill(0));
   const wsRef = useRef<WebSocket | null>(null);
 
   const { data: downloads = [], refetch } = useQuery({
-    queryKey: ["downloads", tab],
-    queryFn: () => downloadsApi.list({ status: tab === "all" ? undefined : tab }),
+    queryKey: ["downloads"],
+    queryFn: () => downloadsApi.list(),
     refetchInterval: (query) => {
       const data = query.state.data ?? [];
-      const hasActive = data.some(
-        (d) => d.status === "downloading" || d.status === "queued"
-      );
+      const hasActive = data.some((d) => d.status === "downloading" || d.status === "queued");
       return hasActive ? 2000 : 10000;
     },
   });
@@ -315,20 +322,15 @@ export function Downloads() {
         const data = JSON.parse(event.data);
         if (!data.download_id || data.type === "heartbeat") return;
 
-        // If status changed to a terminal state, do a full refetch to get fresh data
         if (data.status === "completed" || data.status === "failed" || data.status === "cancelled") {
           qc.invalidateQueries({ queryKey: ["downloads"] });
           return;
         }
 
-        // Otherwise patch in-place for smooth progress updates
-        qc.setQueryData<DownloadType[]>(["downloads", tab], (old) => {
+        qc.setQueryData<DownloadType[]>(["downloads"], (old) => {
           if (!old) return old;
           const found = old.some((dl) => dl.id === data.download_id);
-          if (!found) {
-            // Not in this tab's filtered list — polling will pick it up
-            return old;
-          }
+          if (!found) return old;
           return old.map((dl) =>
             dl.id === data.download_id
               ? {
@@ -342,7 +344,9 @@ export function Downloads() {
               : dl
           );
         });
-      } catch {}
+      } catch {
+        /* ignore malformed frames */
+      }
     };
 
     const ping = setInterval(() => {
@@ -353,24 +357,87 @@ export function Downloads() {
       clearInterval(ping);
       ws.close();
     };
-  }, [tab]);
+  }, [qc]);
 
-  // Update badge count
+  // live throughput history (1s tick)
+  useEffect(() => {
+    const t = setInterval(() => {
+      const list = qc.getQueryData<DownloadType[]>(["downloads"]) ?? [];
+      const total = list.filter((d) => d.status === "downloading").reduce((s, d) => s + d.speed_bps, 0);
+      setSpeedHist((h) => [...h.slice(1), total]);
+    }, 1000);
+    return () => clearInterval(t);
+  }, [qc]);
+
+  // badge count
   useEffect(() => {
     const active = downloads.filter((d) => d.status === "downloading" || d.status === "queued").length;
     setActiveDownloadCount(active);
   }, [downloads, setActiveDownloadCount]);
 
+  const counts = {
+    all: downloads.length,
+    downloading: downloads.filter((d) => d.status === "downloading").length,
+    queued: downloads.filter((d) => d.status === "queued").length,
+    paused: downloads.filter((d) => d.status === "paused").length,
+    completed: downloads.filter((d) => d.status === "completed").length,
+    failed: downloads.filter((d) => d.status === "failed" || d.status === "cancelled").length,
+  };
+
+  const totalSpeed = downloads.filter((d) => d.status === "downloading").reduce((s, d) => s + d.speed_bps, 0);
+  const remaining = downloads
+    .filter((d) => d.status === "downloading" || d.status === "queued")
+    .reduce((s, d) => s + Math.max(0, d.total_bytes - d.downloaded_bytes), 0);
+  const eta = totalSpeed > 0 ? fmtEta(remaining / totalSpeed) : "—";
+
+  let list = downloads;
+  if (tab === "active") list = downloads.filter((d) => ["downloading", "queued", "paused"].includes(d.status));
+  else if (tab === "completed") list = downloads.filter((d) => d.status === "completed");
+  else if (tab === "failed") list = downloads.filter((d) => d.status === "failed" || d.status === "cancelled");
+
+  const tabItems = [
+    {
+      value: "all",
+      label: (
+        <span>
+          All<span className="xtabcount">{counts.all}</span>
+        </span>
+      ),
+    },
+    {
+      value: "active",
+      label: (
+        <span>
+          Active<span className="xtabcount">{counts.downloading + counts.queued + counts.paused}</span>
+        </span>
+      ),
+    },
+    {
+      value: "completed",
+      label: (
+        <span>
+          Completed<span className="xtabcount">{counts.completed}</span>
+        </span>
+      ),
+    },
+    {
+      value: "failed",
+      label: (
+        <span>
+          Failed<span className="xtabcount">{counts.failed}</span>
+        </span>
+      ),
+    },
+  ];
+
   const handlePause = async (id: number) => {
     await downloadsApi.pause(id);
     refetch();
   };
-
   const handleResume = async (id: number) => {
     await downloadsApi.resume(id);
     refetch();
   };
-
   const handleRetry = async (id: number) => {
     try {
       await downloadsApi.retry(id);
@@ -380,7 +447,6 @@ export function Downloads() {
       toast.error("Failed to retry download");
     }
   };
-
   const handleDelete = (id: number) => {
     toast("Delete this download?", {
       action: {
@@ -395,77 +461,80 @@ export function Downloads() {
   };
 
   return (
-    <div className="page-shell flex-1 min-h-0 overflow-y-auto space-y-5 nav-clearance">
-      <section className="glass-card page-hero">
-        <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
-          <div>
-            <p className="page-hero__eyebrow">Downloads</p>
-            <h1 className="page-hero__title">Queue, watch progress, and recover failures gracefully.</h1>
-            <p className="page-hero__body">
-              The downloads area is now more readable on wide screens and easier to operate one-handed on mobile.
-            </p>
-          </div>
-          <div className="page-actions">
-            <span className="rounded-full border border-white/10 px-3 py-2 text-sm text-white/55">
-              {downloads.length} items
+    <div className="xcontent">
+      <div className="xpagehead" style={{ paddingBottom: 18 }}>
+        <div className="xpagehead__eyebrow">IDM-grade queue · WebSocket live</div>
+        <h1 className="xpagehead__title">Downloads</h1>
+      </div>
+
+      <div className="xdl">
+        {/* mission-control banner */}
+        <div className="xdl-banner xrise">
+          <div className="xdl-banner__l">
+            <span className="xdl-banner__eyebrow">
+              <span className="xdl-banner__live">
+                <span className="d" />
+                Live
+              </span>
+              · Total throughput
             </span>
+            <div className="xdl-banner__big">
+              <span className="n">{(totalSpeed / (1024 * 1024)).toFixed(1)}</span>
+              <span className="u">MB/s</span>
+            </div>
+            <div className="xdl-banner__substat">
+              <div>
+                <div className="k">Active</div>
+                <div className="v">{counts.downloading}</div>
+              </div>
+              <div>
+                <div className="k">Queued</div>
+                <div className="v">{counts.queued}</div>
+              </div>
+              <div>
+                <div className="k">ETA</div>
+                <div className="v warn">{eta}</div>
+              </div>
+              <div>
+                <div className="k">Done</div>
+                <div className="v pos">{counts.completed}</div>
+              </div>
+            </div>
+          </div>
+          <div style={{ position: "relative" }}>
+            <SpeedGraph hist={speedHist} />
           </div>
         </div>
-      </section>
 
-      <div className="flex items-center justify-between">
-        <button
-          onClick={() => setShowSettings((v) => !v)}
-          className={`rounded-2xl border border-white/10 p-2 transition-colors ${
-            showSettings
-              ? "bg-purple-500/20 text-purple-400"
-              : "hover:bg-white/10 text-white/40 hover:text-white"
-          }`}
-          title="Download Settings"
-          aria-label="Toggle download settings"
-          aria-expanded={showSettings}
-        >
-          <Settings size={18} />
-        </button>
-      </div>
-
-      {showSettings && <SettingsPanel onClose={() => setShowSettings(false)} />}
-
-      <div className="glass-card flex w-fit gap-1 rounded-[1.4rem] p-1">
-        {TABS.map((t) => (
-          <button
-            key={t}
-            onClick={() => setTab(t)}
-            className={`rounded-xl px-4 py-2 text-sm font-medium capitalize transition-colors ${
-              tab === t ? "btn-accent" : "text-white/50 hover:text-white"
-            }`}
-          >
-            {t}
-          </button>
-        ))}
-      </div>
-
-      {downloads.length === 0 ? (
-        <GlassCard className="p-12">
-          <div className="text-center text-white/30">
-            <Download size={48} className="mx-auto mb-3 opacity-30" />
-            <p>No downloads found</p>
+        <div className="xdl-controls">
+          <div className="xdl-controls__tabs">
+            <Tabs items={tabItems} value={tab} onChange={(v) => setTab(v as Tab)} />
           </div>
-        </GlassCard>
-      ) : (
-        <div className="space-y-3 pr-1">
-          {downloads.map((dl) => (
-            <DownloadRow
-              key={dl.id}
-              dl={dl}
-              onPause={handlePause}
-              onResume={handleResume}
-              onRetry={handleRetry}
-              onDelete={handleDelete}
-            />
-          ))}
         </div>
-      )}
+
+        {list.length === 0 ? (
+          <EmptyState
+            icon={<DownloadIcon />}
+            title="Queue's empty"
+            sub="Nothing here yet. Go find something worth the bandwidth."
+          />
+        ) : (
+          <div>
+            {list.map((dl) => (
+              <DownloadRow
+                key={dl.id}
+                dl={dl}
+                onPause={handlePause}
+                onResume={handleResume}
+                onRetry={handleRetry}
+                onDelete={handleDelete}
+              />
+            ))}
+          </div>
+        )}
+
+        <DownloadEngine />
+      </div>
     </div>
   );
 }
