@@ -229,11 +229,13 @@ async def watch_vod(
         )
     )
     stream = result.scalars().first()
-    ext = stream.container_extension if stream else "mp4"
+    ext = (stream.container_extension if stream else None) or "mp4"
 
+    # Providers commonly serve VOD only as the raw container — their .m3u8
+    # endpoint redirects to an empty manifest. Return the direct file URL.
     client = XtreamClient(playlist.base_url, playlist.username, playlist.password)
-    url = client.build_vod_url(stream_id, "m3u8")
-    return StreamUrlResponse(url=url, stream_type="hls")
+    url = client.build_vod_url(stream_id, ext)
+    return StreamUrlResponse(url=url, stream_type="direct")
 
 
 @router.post("/{playlist_id}/streams/{stream_id}/download", response_model=DownloadResponse, status_code=201)

@@ -270,9 +270,15 @@ async def watch_episode(
     if not playlist:
         raise HTTPException(404, "Playlist not found")
 
+    # Episodes are served only as the raw container on Xtream panels — the
+    # .m3u8 variant redirects to an empty manifest (HLS manifestParsingError).
+    result = await db.execute(select(Episode).where(Episode.episode_id == episode_id))
+    episode = result.scalars().first()
+    ext = (episode.container_extension if episode else None) or "mp4"
+
     client = XtreamClient(playlist.base_url, playlist.username, playlist.password)
-    url = client.build_series_url(episode_id, "m3u8")
-    return StreamUrlResponse(url=url, stream_type="hls")
+    url = client.build_series_url(episode_id, ext)
+    return StreamUrlResponse(url=url, stream_type="direct")
 
 
 @router.get("/{playlist_id}/{series_id}/tracking", response_model=TrackingResponse | None)
