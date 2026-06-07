@@ -65,6 +65,42 @@ async def delete_playlist(playlist_id: int, db: AsyncSession = Depends(get_db)):
     await db.commit()
 
 
+@router.get("/{playlist_id}/account")
+async def get_playlist_account(playlist_id: int, db: AsyncSession = Depends(get_db)):
+    """Proxy the provider's account status (expiry, connections) for this playlist."""
+    result = await db.execute(select(Playlist).where(Playlist.id == playlist_id))
+    playlist = result.scalar_one_or_none()
+    if not playlist:
+        raise HTTPException(404, "Playlist not found")
+
+    client = XtreamClient(playlist.base_url, playlist.username, playlist.password)
+    try:
+        raw = await client.get_user_info()
+    except Exception as e:
+        raise HTTPException(502, f"Provider unreachable: {e}")
+    finally:
+        await client.close()
+
+    user = raw.get("user_info") or {}
+    if not user or str(user.get("auth", 0)) not in ("1", "True", "true"):
+        raise HTTPException(502, "Provider rejected the account credentials")
+
+    def _int(v):
+        try:
+            return int(v)
+        except (TypeError, ValueError):
+            return None
+
+    return {
+        "status": user.get("status"),
+        "is_trial": str(user.get("is_trial", "0")) == "1",
+        "exp_date": _int(user.get("exp_date")),
+        "created_at": _int(user.get("created_at")),
+        "max_connections": _int(user.get("max_connections")),
+        "active_connections": _int(user.get("active_cons")),
+    }
+
+
 @router.post("/{playlist_id}/sync", response_model=PlaylistResponse)
 async def sync_playlist(
     playlist_id: int,

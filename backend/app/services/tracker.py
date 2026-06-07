@@ -17,26 +17,74 @@ settings = get_settings()
 
 
 async def check_tracked_series(db: AsyncSession):
-    """Check all tracked series for new episodes and queue downloads."""
+    """Check all tracked series for new episodes and queue downloads.
+
+    One `get_series` list call per playlist gives every series' `last_modified`;
+    `get_series_info` (one call per series) is then only fetched for series that
+    actually changed since the tracker's last pass.
+    """
+    from app.models.playlist import Playlist
+
     result = await db.execute(
         select(SeriesTracking).join(Series, SeriesTracking.series_id == Series.id)
     )
     trackings = result.scalars().all()
+    if not trackings:
+        return
 
-    for tracking in trackings:
+    # Group by playlist so we fetch each provider's series list once
+    by_playlist: dict[int, list[SeriesTracking]] = {}
+    for t in trackings:
+        by_playlist.setdefault(t.playlist_id, []).append(t)
+
+    for playlist_id, items in by_playlist.items():
+        result = await db.execute(select(Playlist).where(Playlist.id == playlist_id))
+        playlist = result.scalar_one_or_none()
+        if not playlist or not playlist.is_active:
+            continue
+
+        # series_id (provider id) → last_modified
+        modified_map: dict[str, str] | None = None
+        client = XtreamClient(playlist.base_url, playlist.username, playlist.password)
         try:
-            await _process_tracking(db, tracking)
+            series_list = await client.get_series()
+            modified_map = {
+                str(s.get("series_id", "")): str(s.get("last_modified", "") or "")
+                for s in series_list
+            }
         except Exception as e:
-            logger.error(f"Error processing tracking {tracking.id}: {e}")
+            # List fetch failed — fall back to checking every tracked series
+            logger.warning(f"Tracker: series list fetch failed for playlist {playlist_id}: {e}")
+        finally:
+            await client.close()
+
+        for tracking in items:
+            try:
+                await _process_tracking(db, tracking, modified_map)
+            except Exception as e:
+                logger.error(f"Error processing tracking {tracking.id}: {e}")
 
 
-async def _process_tracking(db: AsyncSession, tracking: SeriesTracking):
+async def _process_tracking(
+    db: AsyncSession,
+    tracking: SeriesTracking,
+    modified_map: dict[str, str] | None = None,
+):
     """Process a single series tracking entry."""
     # Get series info
     result = await db.execute(select(Series).where(Series.id == tracking.series_id))
     series = result.scalar_one_or_none()
     if not series:
         return
+
+    # Skip unchanged series — provider bumps last_modified when episodes change
+    current_modified: str | None = None
+    if modified_map is not None:
+        current_modified = modified_map.get(series.series_id)
+        if current_modified and tracking.last_seen_modified == current_modified:
+            tracking.last_checked_at = datetime.utcnow()
+            await db.commit()
+            return
 
     # Get playlist credentials
     from app.models.playlist import Playlist
@@ -78,6 +126,8 @@ async def _process_tracking(db: AsyncSession, tracking: SeriesTracking):
 
     if not new_episodes:
         tracking.last_checked_at = datetime.utcnow()
+        if current_modified:
+            tracking.last_seen_modified = current_modified
         await db.commit()
         return
 
@@ -118,8 +168,6 @@ async def _process_tracking(db: AsyncSession, tracking: SeriesTracking):
             f"{safe_title}.{ext}",
         )
 
-        url = XtreamClient(playlist.base_url, playlist.username, playlist.password).build_series_url(ep_id, ext)
-
         download = Download(
             playlist_id=tracking.playlist_id,
             content_type=ContentType.series,
@@ -132,6 +180,8 @@ async def _process_tracking(db: AsyncSession, tracking: SeriesTracking):
         db.add(download)
 
     tracking.last_checked_at = datetime.utcnow()
+    if current_modified:
+        tracking.last_seen_modified = current_modified
     await db.commit()
 
     # Trigger downloader for new queued items

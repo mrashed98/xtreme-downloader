@@ -38,6 +38,12 @@ class VodStream(Base):
     plot: Mapped[str | None] = mapped_column(Text, nullable=True)
     duration: Mapped[str | None] = mapped_column(String(64), nullable=True)
     language: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    # Enrichment persisted from get_vod_info on first detail view
+    tmdb_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    backdrop: Mapped[str | None] = mapped_column(Text, nullable=True)
+    youtube_trailer: Mapped[str | None] = mapped_column(Text, nullable=True)
+    release_date: Mapped[str | None] = mapped_column(Text, nullable=True)
+    is_adult: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
 
     playlist: Mapped["Playlist"] = relationship("Playlist", back_populates="vod_streams")
 
@@ -59,6 +65,10 @@ class Series(Base):
     language: Mapped[str | None] = mapped_column(String(128), nullable=True)
     youtube_trailer: Mapped[str | None] = mapped_column(Text, nullable=True)
     release_date: Mapped[str | None] = mapped_column(Text, nullable=True)
+    backdrop: Mapped[str | None] = mapped_column(Text, nullable=True)
+    episode_run_time: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    # Provider bumps this when episodes change — drives "latest" ordering + tracker skip logic
+    last_modified: Mapped[str | None] = mapped_column(String(64), nullable=True)
 
     playlist: Mapped["Playlist"] = relationship("Playlist", back_populates="series")
     seasons: Mapped[list["Season"]] = relationship("Season", back_populates="series", cascade="all, delete-orphan")

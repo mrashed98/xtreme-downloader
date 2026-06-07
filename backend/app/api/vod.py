@@ -1,7 +1,7 @@
 import os
 import logging
 from fastapi import APIRouter, Depends, HTTPException, Query, BackgroundTasks
-from sqlalchemy import select
+from sqlalchemy import select, func, BigInteger
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
@@ -64,12 +64,12 @@ def _build_vod_detail_payload(stream: VodStream, raw_info: dict | None) -> dict:
         "rating": rating_val,
         "plot": info.get("plot") or base.get("plot"),
         "duration": info.get("duration") or base.get("duration"),
-        "tmdb_id": info.get("tmdb_id"),
+        "tmdb_id": info.get("tmdb_id") or stream.tmdb_id,
         "movie_image": info.get("movie_image"),
-        "backdrop": info.get("backdrop"),
+        "backdrop": info.get("backdrop") or stream.backdrop,
         "backdrop_path": backdrop_path,
-        "youtube_trailer": info.get("youtube_trailer"),
-        "release_date": info.get("releasedate"),
+        "youtube_trailer": info.get("youtube_trailer") or stream.youtube_trailer,
+        "release_date": info.get("releasedate") or stream.release_date,
         "duration_secs": info.get("duration_secs"),
         "bitrate": info.get("bitrate"),
         "rating_5based": rating_5,
@@ -123,11 +123,14 @@ async def get_vod_streams(
     cast: str | None = Query(None),
     rating_min: float | None = Query(None),
     search: str | None = Query(None),
+    include_adult: bool = Query(False),
     limit: int = Query(50, le=200),
     offset: int = Query(0),
     db: AsyncSession = Depends(get_db),
 ):
     query = select(VodStream).where(VodStream.playlist_id == playlist_id)
+    if not include_adult:
+        query = query.where(VodStream.is_adult == False)  # noqa: E712
     if category_id and not latest:
         query = query.where(VodStream.category_id == category_id)
     if language:
@@ -141,7 +144,9 @@ async def get_vod_streams(
     if search:
         query = query.where(VodStream.name.ilike(f"%{search}%"))
     if latest:
-        query = query.order_by(VodStream.added.desc().nullslast(), VodStream.id.desc()).limit(min(limit, 50))
+        # `added` is a unix-timestamp string — order numerically, empty/null last
+        added_num = func.nullif(VodStream.added, "").cast(BigInteger)
+        query = query.order_by(added_num.desc().nullslast(), VodStream.id.desc()).limit(min(limit, 50))
     else:
         query = query.order_by(VodStream.name).offset(offset).limit(limit)
     result = await db.execute(query)
@@ -175,7 +180,35 @@ async def get_vod_stream(
     finally:
         await client.close()
 
-    return _build_vod_detail_payload(stream, raw_info)
+    payload = _build_vod_detail_payload(stream, raw_info)
+
+    # Persist enrichment — list syncs don't carry this metadata, so the catalog
+    # gets progressively richer (searchable genre/cast, real release dates).
+    try:
+        enrich = {
+            "genre": payload.get("genre"),
+            "cast": payload.get("cast"),
+            "director": payload.get("director"),
+            "plot": payload.get("plot"),
+            "duration": payload.get("duration"),
+            "rating": payload.get("rating"),
+            "tmdb_id": payload.get("tmdb_id"),
+            "backdrop": payload.get("backdrop"),
+            "youtube_trailer": payload.get("youtube_trailer"),
+            "release_date": payload.get("release_date"),
+        }
+        changed = False
+        for key, value in enrich.items():
+            if value and getattr(stream, key) != value:
+                setattr(stream, key, value)
+                changed = True
+        if changed:
+            await db.commit()
+    except Exception as e:
+        logger.warning(f"VOD enrichment persist failed for stream {stream_id}: {e}")
+        await db.rollback()
+
+    return payload
 
 
 @router.get("/{playlist_id}/streams/{stream_id}/watch", response_model=StreamUrlResponse)

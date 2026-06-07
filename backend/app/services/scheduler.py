@@ -4,6 +4,7 @@ import logging
 from datetime import datetime
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.interval import IntervalTrigger
+from sqlalchemy import func as sa_func
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from app.config import get_settings
 
@@ -11,6 +12,36 @@ logger = logging.getLogger(__name__)
 settings = get_settings()
 
 _scheduler: AsyncIOScheduler | None = None
+
+# Providers rarely send a `language` field; they encode language in category names
+# (e.g. "Arabic Movies - عربي 2026", "مسلسلات تركية تعرض حاليا"). Derive it.
+_LANGUAGE_KEYWORDS: list[tuple[str, tuple[str, ...]]] = [
+    ("Arabic", ("عرب", "مصر", "سوري", "خليج", "رمضان", "ramadan", "arabic")),
+    ("Turkish", ("ترك", "turkish", "turk")),
+    ("Hindi", ("هند", "india", "hindi", "bolly")),
+    ("Asian", ("اسيو", "آسيو", "asian", "korea")),
+    ("Anime", ("انمي", "أنمي", "anime")),
+    ("French", ("فرنسي", "french")),
+    ("Spanish", ("اسباني", "إسباني", "spanish", "latino")),
+    ("English", ("اجنبي", "أجنبي", "english")),
+]
+
+
+def _lang_from_category(name: str | None) -> str | None:
+    if not name:
+        return None
+    lowered = name.lower()
+    for lang, keywords in _LANGUAGE_KEYWORDS:
+        if any(kw in lowered for kw in keywords):
+            return lang
+    return None
+
+
+def _category_language_map(cats: list[dict]) -> dict[str, str | None]:
+    return {
+        str(cat.get("category_id", "")): _lang_from_category(cat.get("category_name"))
+        for cat in cats
+    }
 
 
 def get_scheduler() -> AsyncIOScheduler:
@@ -118,40 +149,49 @@ async def _sync_playlist(db, playlist):
                     set_={"name": cat.get("category_name", "")},
                 ))
 
+            vod_cat_lang = _category_language_map(vod_cats)
+
             vod_streams = await client.get_vod_streams()
             logger.info(f"[{playlist.name}] Upserting {len(vod_streams)} VOD streams")
             for s in vod_streams:
                 rating = _safe_float(s.get("rating"))
-                await db.execute(pg_insert(VodStream).values(
+                cat_id = str(s.get("category_id", "")) if s.get("category_id") else None
+                language = s.get("language") or (vod_cat_lang.get(cat_id) if cat_id else None)
+                stmt = pg_insert(VodStream).values(
                     playlist_id=playlist.id,
                     stream_id=str(s.get("stream_id", "")),
                     name=s.get("name", ""),
                     icon=s.get("stream_icon"),
-                    category_id=str(s.get("category_id", "")) if s.get("category_id") else None,
+                    category_id=cat_id,
                     added=str(s.get("added", "")) if s.get("added") else None,
                     container_extension=s.get("container_extension"),
-                    imdb_id=s.get("stream_id") if s.get("direct_source") else None,
                     genre=s.get("genre"),
                     cast=s.get("cast"),
                     director=s.get("director"),
                     rating=rating,
                     plot=s.get("plot"),
                     duration=s.get("duration"),
-                    language=s.get("language"),
-                ).on_conflict_do_update(
+                    language=language,
+                    is_adult=str(s.get("is_adult", "0")) == "1",
+                )
+                # List payloads omit most metadata — coalesce so syncs never wipe
+                # values persisted by the VOD-info enrichment.
+                await db.execute(stmt.on_conflict_do_update(
                     constraint="uq_vod_streams_playlist_stream",
                     set_={
                         "name": s.get("name", ""),
                         "icon": s.get("stream_icon"),
-                        "category_id": str(s.get("category_id", "")) if s.get("category_id") else None,
-                        "genre": s.get("genre"),
-                        "cast": s.get("cast"),
-                        "director": s.get("director"),
-                        "rating": rating,
-                        "plot": s.get("plot"),
-                        "duration": s.get("duration"),
-                        "language": s.get("language"),
+                        "category_id": cat_id,
+                        "added": stmt.excluded.added,
+                        "genre": sa_func.coalesce(stmt.excluded.genre, VodStream.genre),
+                        "cast": sa_func.coalesce(stmt.excluded.cast, VodStream.cast),
+                        "director": sa_func.coalesce(stmt.excluded.director, VodStream.director),
+                        "rating": sa_func.coalesce(stmt.excluded.rating, VodStream.rating),
+                        "plot": sa_func.coalesce(stmt.excluded.plot, VodStream.plot),
+                        "duration": sa_func.coalesce(stmt.excluded.duration, VodStream.duration),
+                        "language": sa_func.coalesce(stmt.excluded.language, VodStream.language),
                         "container_extension": s.get("container_extension"),
+                        "is_adult": stmt.excluded.is_adult,
                     },
                 ))
 
@@ -177,40 +217,56 @@ async def _sync_playlist(db, playlist):
                     set_={"name": cat.get("category_name", "")},
                 ))
 
+            series_cat_lang = _category_language_map(series_cats)
+
             series_list = await client.get_series()
             logger.info(f"[{playlist.name}] Upserting {len(series_list)} series")
             for s in series_list:
                 rating = _safe_float(s.get("rating") or s.get("rating_5based"))
                 trailer = s.get("youtube_trailer") or None
                 release_date = s.get("releaseDate") or s.get("release_date") or None
+                cat_id = str(s.get("category_id", "")) if s.get("category_id") else None
+                language = s.get("language") or (series_cat_lang.get(cat_id) if cat_id else None)
+                backdrop_path = s.get("backdrop_path")
+                backdrop = backdrop_path[0] if isinstance(backdrop_path, list) and backdrop_path else (
+                    backdrop_path if isinstance(backdrop_path, str) else None
+                )
+                run_time = str(s.get("episode_run_time", "")) or None
+                last_modified = str(s.get("last_modified", "")) or None
                 await db.execute(pg_insert(Series).values(
                     playlist_id=playlist.id,
                     series_id=str(s.get("series_id", "")),
                     name=s.get("name", ""),
                     cover=s.get("cover"),
-                    category_id=str(s.get("category_id", "")) if s.get("category_id") else None,
+                    category_id=cat_id,
                     cast=s.get("cast"),
                     director=s.get("director"),
                     genre=s.get("genre"),
                     plot=s.get("plot"),
                     rating=rating,
-                    language=s.get("language"),
+                    language=language,
                     youtube_trailer=trailer,
                     release_date=release_date,
+                    backdrop=backdrop,
+                    episode_run_time=run_time,
+                    last_modified=last_modified,
                 ).on_conflict_do_update(
                     constraint="uq_series_playlist_series",
                     set_={
                         "name": s.get("name", ""),
                         "cover": s.get("cover"),
-                        "category_id": str(s.get("category_id", "")) if s.get("category_id") else None,
+                        "category_id": cat_id,
                         "cast": s.get("cast"),
                         "director": s.get("director"),
                         "genre": s.get("genre"),
                         "plot": s.get("plot"),
                         "rating": rating,
-                        "language": s.get("language"),
+                        "language": language,
                         "youtube_trailer": trailer,
                         "release_date": release_date,
+                        "backdrop": backdrop,
+                        "episode_run_time": run_time,
+                        "last_modified": last_modified,
                     },
                 ))
 

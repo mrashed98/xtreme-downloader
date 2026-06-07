@@ -122,6 +122,9 @@ class SeriesResponse(BaseModel):
     language: str | None
     youtube_trailer: str | None
     release_date: str | None
+    backdrop: str | None = None
+    episode_run_time: str | None = None
+    last_modified: str | None = None
 
 
 class SeriesDetailResponse(SeriesResponse):

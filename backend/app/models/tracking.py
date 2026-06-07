@@ -14,6 +14,8 @@ class SeriesTracking(Base):
     track_all_seasons: Mapped[bool] = mapped_column(Boolean, default=False)
     seasons_json: Mapped[list | None] = mapped_column(JSON, nullable=True)  # list of season numbers
     last_checked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # Provider last_modified value at the time of the last tracker pass (skip unchanged series)
+    last_seen_modified: Mapped[str | None] = mapped_column(String(64), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
 
     series: Mapped["Series"] = relationship("Series", back_populates="tracking")

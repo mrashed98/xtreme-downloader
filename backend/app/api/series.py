@@ -1,7 +1,7 @@
 import os
 import logging
 from fastapi import APIRouter, Depends, HTTPException, Query, BackgroundTasks
-from sqlalchemy import select, and_, delete, text
+from sqlalchemy import select, and_, delete, text, func, BigInteger
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
@@ -138,7 +138,14 @@ async def get_series(
     if search:
         query = query.where(Series.name.ilike(f"%{search}%"))
     if latest:
-        query = query.order_by(Series.release_date.desc().nullslast(), Series.id.desc()).limit(min(limit, 50))
+        # last_modified is bumped by the provider when episodes change — that's
+        # what "latest" means for series (release_date is only the first-air date).
+        modified_num = func.nullif(Series.last_modified, "").cast(BigInteger)
+        query = query.order_by(
+            modified_num.desc().nullslast(),
+            Series.release_date.desc().nullslast(),
+            Series.id.desc(),
+        ).limit(min(limit, 50))
     else:
         query = query.order_by(Series.name).offset(offset).limit(limit)
     result = await db.execute(query)
