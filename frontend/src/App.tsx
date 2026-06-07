@@ -4,6 +4,7 @@ import { Toaster } from "sonner";
 import { TopNav } from "./components/Layout/TopNav";
 import { MobileTop } from "./components/Layout/MobileTop";
 import { MobileBottomNav } from "./components/Layout/MobileBottomNav";
+import { AddToHomeScreen } from "./components/Layout/AddToHomeScreen";
 import { VideoPlayer } from "./components/Player/VideoPlayer";
 import { Dashboard } from "./pages/Dashboard";
 import { LiveTV } from "./pages/LiveTV";
@@ -39,6 +40,7 @@ export default function App() {
             </Routes>
           </main>
           <MobileBottomNav />
+          <AddToHomeScreen />
         </div>
         <VideoPlayer />
         <Toaster
