@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import get_db
 from app.models.download import Download, DownloadStatus, ContentType
 from app.models.playlist import Playlist
+from app.models.stream import VodStream, Series, Episode
 from app.schemas.download import DownloadResponse
 from app.services import downloader as dl_service
 from app.services.download_runner import schedule_download
@@ -14,6 +15,39 @@ from app.services.xtream import XtreamClient
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/downloads", tags=["downloads"])
+
+
+async def _poster_map(db: AsyncSession, downloads: list[Download]) -> dict[int, str | None]:
+    """Resolve artwork per download: VOD icon by stream_id; series cover via the
+    episode → series join (series downloads store the *episode* id)."""
+    vod_ids = {d.stream_id for d in downloads if d.content_type == ContentType.vod}
+    ep_ids = {d.stream_id for d in downloads if d.content_type == ContentType.series}
+
+    vod_icons: dict[str, str | None] = {}
+    if vod_ids:
+        result = await db.execute(
+            select(VodStream.stream_id, VodStream.icon).where(VodStream.stream_id.in_(vod_ids))
+        )
+        vod_icons = {row[0]: row[1] for row in result.all()}
+
+    ep_covers: dict[str, str | None] = {}
+    if ep_ids:
+        result = await db.execute(
+            select(Episode.episode_id, Series.cover)
+            .join(Series, Episode.series_id == Series.id)
+            .where(Episode.episode_id.in_(ep_ids))
+        )
+        ep_covers = {row[0]: row[1] for row in result.all()}
+
+    out: dict[int, str | None] = {}
+    for d in downloads:
+        if d.content_type == ContentType.vod:
+            out[d.id] = vod_icons.get(d.stream_id)
+        elif d.content_type == ContentType.series:
+            out[d.id] = ep_covers.get(d.stream_id)
+        else:
+            out[d.id] = None
+    return out
 
 
 @router.get("", response_model=list[DownloadResponse])
@@ -29,7 +63,13 @@ async def list_downloads(
         query = query.where(Download.content_type == content_type)
     query = query.order_by(Download.created_at.desc())
     result = await db.execute(query)
-    return result.scalars().all()
+    downloads = list(result.scalars().all())
+
+    posters = await _poster_map(db, downloads)
+    return [
+        DownloadResponse.model_validate(d).model_copy(update={"poster": posters.get(d.id)})
+        for d in downloads
+    ]
 
 
 @router.get("/{download_id}", response_model=DownloadResponse)

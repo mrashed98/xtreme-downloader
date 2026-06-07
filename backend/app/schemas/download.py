@@ -22,6 +22,7 @@ class DownloadResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
     completed_at: datetime | None
+    poster: str | None = None
 
 
 class VodDownloadRequest(BaseModel):

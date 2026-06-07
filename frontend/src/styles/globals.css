@@ -2146,6 +2146,15 @@ img {
   padding: 6px;
   overflow: hidden;
 }
+.xdlrow__poster--img {
+  padding: 0;
+  align-items: stretch;
+}
+.xdlrow__poster--img img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
 .xdlrow__poster span {
   font-family: var(--font-display);
   font-stretch: var(--stretch-display);

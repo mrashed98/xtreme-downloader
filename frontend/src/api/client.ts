@@ -165,6 +165,7 @@ export interface Download {
   downloaded_bytes: number;
   error_message: string | null;
   created_at: string;
+  poster?: string | null;
 }
 
 export interface Tracking {

@@ -83,8 +83,20 @@ function DownloadRow({
 
   return (
     <div className="xdlrow">
-      <div className="xdlrow__poster" style={{ background: TONE_BG[tone] }}>
-        <span style={{ color: toneFg(tone) }}>{dl.title.split(/[\s—·-]+/)[0]}</span>
+      <div className={"xdlrow__poster" + (dl.poster ? " xdlrow__poster--img" : "")} style={{ background: TONE_BG[tone] }}>
+        {dl.poster ? (
+          <img
+            src={dl.poster}
+            alt=""
+            loading="lazy"
+            onError={(e) => {
+              const img = e.target as HTMLImageElement;
+              img.style.display = "none";
+            }}
+          />
+        ) : (
+          <span style={{ color: toneFg(tone) }}>{dl.title.split(/[\s—·-]+/)[0]}</span>
+        )}
       </div>
       <div className="xdlrow__mid">
         <div className="xdlrow__toprow">
