@@ -8,6 +8,8 @@ import logging
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from app.services import xtream
+
 if TYPE_CHECKING:
     from app.database import AsyncSession
 
@@ -210,7 +212,10 @@ async def download_file(
 
     try:
         connector = aiohttp.TCPConnector(ssl=False, limit=2)
-        async with aiohttp.ClientSession(connector=connector) as session:
+        # ponytail: same 466 anti-bot block as xtream.py — media URLs need a real UA too
+        async with aiohttp.ClientSession(
+            connector=connector, headers={"User-Agent": xtream.USER_AGENT}
+        ) as session:
             logger.info(f"[Download #{download_id}] Checking range support for: {url[:80]}...")
             supports_range, total_bytes = await _check_range_support(session, url, download_id)
             logger.info(
