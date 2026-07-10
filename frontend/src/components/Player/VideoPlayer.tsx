@@ -210,20 +210,25 @@ export function VideoPlayer() {
     };
 
     const handleDuration = () => setDuration(video.duration);
-    const handlePlay = () => setPlaying(true);
-    const handlePause = () => setPlaying(false);
+    // Reconcile from the element's real state. Live HLS often reaches playback via
+    // `playing` (after buffering/live-edge seek) without a `play` we'd otherwise catch,
+    // leaving the Play button stuck on-screen while the stream runs.
+    const syncPlaying = () => setPlaying(!video.paused);
 
     video.addEventListener("ended", handleEnded);
     video.addEventListener("timeupdate", handleTimeUpdate);
     video.addEventListener("durationchange", handleDuration);
-    video.addEventListener("play", handlePlay);
-    video.addEventListener("pause", handlePause);
+    video.addEventListener("play", syncPlaying);
+    video.addEventListener("playing", syncPlaying);
+    video.addEventListener("pause", syncPlaying);
+    syncPlaying();
     return () => {
       video.removeEventListener("ended", handleEnded);
       video.removeEventListener("timeupdate", handleTimeUpdate);
       video.removeEventListener("durationchange", handleDuration);
-      video.removeEventListener("play", handlePlay);
-      video.removeEventListener("pause", handlePause);
+      video.removeEventListener("play", syncPlaying);
+      video.removeEventListener("playing", syncPlaying);
+      video.removeEventListener("pause", syncPlaying);
     };
   }, [hasNext, nextTrack, player.queueIndex]);
 
