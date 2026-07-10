@@ -9,6 +9,10 @@ from urllib.parse import urljoin
 
 logger = logging.getLogger(__name__)
 
+# ponytail: provider (lionzsmt/nginx) returns HTTP 466 for the default aiohttp UA —
+# any real IPTV-client UA passes. Keep this set or syncs/downloads break.
+USER_AGENT = "VLC/3.0.20 LibVLC/3.0.20"
+
 
 class XtreamClient:
     def __init__(self, base_url: str, username: str, password: str):
@@ -23,6 +27,7 @@ class XtreamClient:
             self._session = aiohttp.ClientSession(
                 timeout=aiohttp.ClientTimeout(total=30),
                 connector=aiohttp.TCPConnector(ssl=False),
+                headers={"User-Agent": USER_AGENT},
             )
         return self._session
 
