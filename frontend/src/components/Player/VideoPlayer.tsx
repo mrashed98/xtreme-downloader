@@ -210,9 +210,7 @@ export function VideoPlayer() {
     };
 
     const handleDuration = () => setDuration(video.duration);
-    // Reconcile from the element's real state. Live HLS often reaches playback via
-    // `playing` (after buffering/live-edge seek) without a `play` we'd otherwise catch,
-    // leaving the Play button stuck on-screen while the stream runs.
+    // Reconcile from the element's real paused state on any play/pause transition.
     const syncPlaying = () => setPlaying(!video.paused);
 
     video.addEventListener("ended", handleEnded);
@@ -230,7 +228,11 @@ export function VideoPlayer() {
       video.removeEventListener("playing", syncPlaying);
       video.removeEventListener("pause", syncPlaying);
     };
-  }, [hasNext, nextTrack, player.queueIndex]);
+    // player.isOpen MUST be here: the <video> only mounts once the player opens, but
+    // queueIndex is 0 on first open so without isOpen this effect never re-runs after
+    // mount — the play/pause/duration listeners never attach and `playing` stays stuck
+    // false (Play button never clears; VOD is misdetected as live).
+  }, [player.isOpen, hasNext, nextTrack, player.queueIndex]);
 
   if (!player.isOpen || !currentItem) return null;
 
