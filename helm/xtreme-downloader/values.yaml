@@ -1,7 +1,7 @@
 backend:
   image:
     repository: ghcr.io/mrashed98/xtreme-downloader-backend
-    tag: 6d6e41d0aa68f459e88013a72d0b17364a5ba752
+    tag: 933be9c9c47510f3375e1e0b7b11fc6a50413bc0
     pullPolicy: Always
   replicaCount: 1
   resources:
@@ -21,7 +21,7 @@ backend:
 frontend:
   image:
     repository: ghcr.io/mrashed98/xtreme-downloader-frontend
-    tag: 6d6e41d0aa68f459e88013a72d0b17364a5ba752
+    tag: 933be9c9c47510f3375e1e0b7b11fc6a50413bc0
     pullPolicy: Always
   replicaCount: 1
   resources:
