@@ -64,12 +64,16 @@ function fmtEta(seconds: number): string {
 
 function DownloadRow({
   dl,
+  selected,
+  onToggleSelect,
   onPause,
   onResume,
   onRetry,
   onDelete,
 }: {
   dl: DownloadType;
+  selected: boolean;
+  onToggleSelect: (id: number, shiftKey: boolean) => void;
   onPause: (id: number) => void;
   onResume: (id: number) => void;
   onRetry: (id: number) => void;
@@ -82,7 +86,15 @@ function DownloadRow({
   const eta = active && dl.speed_bps > 0 ? (dl.total_bytes - dl.downloaded_bytes) / dl.speed_bps : null;
 
   return (
-    <div className="xdlrow">
+    <div className={"xdlrow" + (selected ? " xdlrow--selected" : "")}>
+      <label className="xdlrow__check" onClick={(e) => e.stopPropagation()}>
+        <input
+          type="checkbox"
+          checked={selected}
+          onChange={(e) => onToggleSelect(dl.id, (e.nativeEvent as MouseEvent).shiftKey)}
+          aria-label={`Select ${dl.title}`}
+        />
+      </label>
       <div className={"xdlrow__poster" + (dl.poster ? " xdlrow__poster--img" : "")} style={{ background: TONE_BG[tone] }}>
         {dl.poster ? (
           <img
@@ -311,7 +323,11 @@ export function Downloads() {
   const setActiveDownloadCount = useAppStore((s) => s.setActiveDownloadCount);
   const [tab, setTab] = useState<Tab>("all");
   const [speedHist, setSpeedHist] = useState<number[]>(() => Array(GRAPH_LEN).fill(0));
+  const [selected, setSelected] = useState<Set<number>>(() => new Set());
+  const [busy, setBusy] = useState(false);
   const wsRef = useRef<WebSocket | null>(null);
+  // Anchor for shift-click range selection.
+  const lastPickedRef = useRef<number | null>(null);
 
   const { data: downloads = [], refetch } = useQuery({
     queryKey: ["downloads"],
@@ -380,6 +396,24 @@ export function Downloads() {
     }, 1000);
     return () => clearInterval(t);
   }, [qc]);
+
+  // Switching tabs clears the selection: acting on rows you can no longer see
+  // is how people delete the wrong thing.
+  useEffect(() => {
+    setSelected(new Set());
+    lastPickedRef.current = null;
+  }, [tab]);
+
+  // Drop ids that have vanished (completed, deleted elsewhere) so the count
+  // never claims more than is actually selectable.
+  useEffect(() => {
+    setSelected((prev) => {
+      if (prev.size === 0) return prev;
+      const live = new Set(downloads.map((d) => d.id));
+      const next = new Set([...prev].filter((id) => live.has(id)));
+      return next.size === prev.size ? prev : next;
+    });
+  }, [downloads]);
 
   // badge count
   useEffect(() => {
@@ -459,6 +493,83 @@ export function Downloads() {
       toast.error("Failed to retry download");
     }
   };
+  const toggleSelect = (id: number, shiftKey: boolean) => {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      const anchor = lastPickedRef.current;
+      // Shift-click extends from the last pick, over the *visible* order.
+      if (shiftKey && anchor !== null && anchor !== id) {
+        const ids = list.map((d) => d.id);
+        const a = ids.indexOf(anchor);
+        const b = ids.indexOf(id);
+        if (a !== -1 && b !== -1) {
+          const [lo, hi] = a < b ? [a, b] : [b, a];
+          const add = !prev.has(id);
+          for (let i = lo; i <= hi; i++) add ? next.add(ids[i]) : next.delete(ids[i]);
+          lastPickedRef.current = id;
+          return next;
+        }
+      }
+      next.has(id) ? next.delete(id) : next.add(id);
+      lastPickedRef.current = id;
+      return next;
+    });
+  };
+
+  const allVisibleSelected = list.length > 0 && list.every((d) => selected.has(d.id));
+  const toggleSelectAll = () => {
+    setSelected(allVisibleSelected ? new Set() : new Set(list.map((d) => d.id)));
+    lastPickedRef.current = null;
+  };
+
+  const reportBulk = (label: string, res: { requested: number; succeeded: number; errors: { error: string }[] }) => {
+    if (res.requested === 0) return toast.info("Nothing matched");
+    if (res.errors.length === 0) return toast.success(`${label}: ${res.succeeded}`);
+    // Skipped items are usually "wrong state", which is expected when acting on
+    // a mixed selection -- surface it without calling the whole thing a failure.
+    toast.warning(`${label}: ${res.succeeded} done, ${res.errors.length} skipped`, {
+      description: res.errors[0]?.error,
+    });
+  };
+
+  const runBulk = async (action: "pause" | "resume" | "retry" | "delete", deleteFile = false) => {
+    const ids = [...selected];
+    if (ids.length === 0) return;
+    setBusy(true);
+    try {
+      const res = await downloadsApi.bulk({ action, ids, delete_file: deleteFile });
+      reportBulk(action[0].toUpperCase() + action.slice(1), res);
+      setSelected(new Set());
+      qc.invalidateQueries({ queryKey: ["downloads"] });
+    } catch {
+      toast.error(`Bulk ${action} failed`);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const retryAllFailed = async () => {
+    setBusy(true);
+    try {
+      const res = await downloadsApi.bulk({ action: "retry", status: "failed" });
+      reportBulk("Re-queued", res);
+      setSelected(new Set());
+      qc.invalidateQueries({ queryKey: ["downloads"] });
+    } catch {
+      toast.error("Retry all failed");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const confirmBulkDelete = () => {
+    const n = selected.size;
+    toast(`Delete ${n} download${n === 1 ? "" : "s"}?`, {
+      action: { label: "Delete", onClick: () => runBulk("delete") },
+      cancel: { label: "Cancel", onClick: () => {} },
+    });
+  };
+
   const handleDelete = (id: number) => {
     toast("Delete this download?", {
       action: {
@@ -522,6 +633,11 @@ export function Downloads() {
           <div className="xdl-controls__tabs">
             <Tabs items={tabItems} value={tab} onChange={(v) => setTab(v as Tab)} />
           </div>
+          {counts.failed > 0 && (
+            <button className="xbulkbtn xbulkbtn--accent" onClick={retryAllFailed} disabled={busy}>
+              Retry all failed ({counts.failed})
+            </button>
+          )}
         </div>
 
         {list.length === 0 ? (
@@ -532,10 +648,42 @@ export function Downloads() {
           />
         ) : (
           <div>
+            <div className="xbulkbar">
+              <label className="xbulkbar__all">
+                <input
+                  type="checkbox"
+                  checked={allVisibleSelected}
+                  onChange={toggleSelectAll}
+                  aria-label="Select all visible downloads"
+                />
+                <span>{selected.size > 0 ? `${selected.size} selected` : "Select all"}</span>
+              </label>
+              {selected.size > 0 && (
+                <div className="xbulkbar__actions">
+                  <button className="xbulkbtn" onClick={() => runBulk("pause")} disabled={busy}>
+                    Pause
+                  </button>
+                  <button className="xbulkbtn" onClick={() => runBulk("resume")} disabled={busy}>
+                    Resume
+                  </button>
+                  <button className="xbulkbtn xbulkbtn--accent" onClick={() => runBulk("retry")} disabled={busy}>
+                    Retry
+                  </button>
+                  <button className="xbulkbtn xbulkbtn--danger" onClick={confirmBulkDelete} disabled={busy}>
+                    Delete
+                  </button>
+                  <button className="xbulkbtn xbulkbtn--ghost" onClick={() => setSelected(new Set())} disabled={busy}>
+                    Clear
+                  </button>
+                </div>
+              )}
+            </div>
             {list.map((dl) => (
               <DownloadRow
                 key={dl.id}
                 dl={dl}
+                selected={selected.has(dl.id)}
+                onToggleSelect={toggleSelect}
                 onPause={handlePause}
                 onResume={handleResume}
                 onRetry={handleRetry}

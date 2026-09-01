@@ -278,7 +278,26 @@ export const downloadsApi = {
   retry: (id: number) => api.post<Download>(`/downloads/${id}/retry`).then((r) => r.data),
   delete: (id: number, deleteFile = false) =>
     api.delete(`/downloads/${id}`, { params: { delete_file: deleteFile } }),
+  // One action over many downloads. Pass `ids` for an explicit selection, or
+  // `status` to hit everything in that state -- `{action:"retry",status:"failed"}`
+  // is "retry all" without the client having to enumerate ids.
+  bulk: (body: BulkActionRequest) =>
+    api.post<BulkActionResponse>("/downloads/bulk", body).then((r) => r.data),
 };
+
+export interface BulkActionRequest {
+  action: "pause" | "resume" | "retry" | "delete";
+  ids?: number[];
+  status?: string;
+  delete_file?: boolean;
+}
+
+export interface BulkActionResponse {
+  action: string;
+  requested: number;
+  succeeded: number;
+  errors: { id: number; error: string }[];
+}
 
 // Settings API
 export interface DownloadSettings {

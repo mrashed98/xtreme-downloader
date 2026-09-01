@@ -40,3 +40,18 @@ class Download(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow)
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+def statuses_for_filter(status: str) -> list["DownloadStatus"]:
+    """Expand a bulk `status` filter into concrete statuses.
+
+    "failed" deliberately also covers `cancelled`, matching the UI's Failed tab
+    -- otherwise "retry all failed" silently skips everything the user cancelled
+    and the tab count would not agree with what the action did.
+
+    Lives here rather than in the router so it can be checked without importing
+    the app's database engine.
+    """
+    if status == "failed":
+        return [DownloadStatus.failed, DownloadStatus.cancelled]
+    return [DownloadStatus(status)]

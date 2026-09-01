@@ -2121,7 +2121,8 @@ img {
 /* download row */
 .xdlrow {
   display: grid;
-  grid-template-columns: 54px 1fr auto;
+  /* leading column is the bulk-select checkbox */
+  grid-template-columns: 22px 54px 1fr auto;
   gap: 18px;
   align-items: center;
   background: var(--surface-card);
@@ -3580,4 +3581,91 @@ img {
   .xoverlay {
     padding: 20px 12px;
   }
+}
+
+
+/* ---------------------------------------------------------------- bulk select
+   Multi-select on the downloads list, plus the bulk action bar. */
+.xdlrow__check {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+.xdlrow__check input {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--volt-500);
+  cursor: pointer;
+}
+.xdlrow--selected {
+  border-color: var(--volt-700);
+  background: var(--surface-card-hover);
+}
+
+.xbulkbar {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+  padding: 10px 18px;
+  margin-bottom: 8px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--surface-inset);
+}
+.xbulkbar__all {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+.xbulkbar__all input {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--volt-500);
+  cursor: pointer;
+}
+.xbulkbar__actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-left: auto;
+}
+
+.xbulkbtn {
+  height: 32px;
+  padding: 0 14px;
+  border-radius: var(--radius-sm, 8px);
+  border: 1px solid var(--border-subtle);
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 13px;
+  cursor: pointer;
+  transition: background var(--dur-base) var(--ease-out), color var(--dur-base) var(--ease-out),
+    border-color var(--dur-base) var(--ease-out);
+}
+.xbulkbtn:hover:not(:disabled) {
+  color: var(--text-primary);
+  border-color: var(--border-strong);
+  background: var(--surface-card-hover);
+}
+.xbulkbtn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.xbulkbtn--accent {
+  color: var(--volt-500);
+  border-color: var(--volt-700);
+}
+.xbulkbtn--danger:hover:not(:disabled) {
+  color: var(--neg-500);
+  border-color: var(--neg-500);
+}
+.xbulkbtn--ghost {
+  border-color: transparent;
+  color: var(--text-tertiary);
 }

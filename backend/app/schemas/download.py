@@ -1,4 +1,6 @@
 from datetime import datetime
+from typing import Literal
+
 from pydantic import BaseModel, Field
 
 
@@ -74,3 +76,32 @@ class TrackResponse(TrackingResponse):
 
 class PatchEpisodeRequest(BaseModel):
     monitored: bool
+
+
+class BulkActionRequest(BaseModel):
+    """Act on many downloads at once.
+
+    Provide `ids` for an explicit selection, or `status` to target everything
+    currently in that state -- `{"action": "retry", "status": "failed"}` is the
+    "retry all failed" case and avoids the client having to enumerate ids it
+    may not have fetched.
+    """
+
+    action: Literal["pause", "resume", "retry", "delete"]
+    ids: list[int] | None = None
+    status: str | None = None
+    delete_file: bool = False
+
+
+class BulkActionItemError(BaseModel):
+    id: int
+    error: str
+
+
+class BulkActionResponse(BaseModel):
+    action: str
+    requested: int
+    succeeded: int
+    # Per-item failures are reported rather than aborting the batch: one
+    # download in the wrong state should not stop the other forty.
+    errors: list[BulkActionItemError] = []
