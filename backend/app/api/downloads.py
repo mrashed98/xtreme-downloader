@@ -71,7 +71,7 @@ async def _get(db: AsyncSession, download_id: int) -> Download:
 
 async def _pause_one(db: AsyncSession, dl: Download) -> Download:
     if dl.status not in (DownloadStatus.downloading, DownloadStatus.queued):
-        raise ValueError(f"Cannot pause download in status '{dl.status}'")
+        raise ValueError(f"Cannot pause download in status '{dl.status.value}'")
     dl_service.pause_download(dl.id)
     dl.status = DownloadStatus.paused
     return dl
@@ -79,7 +79,7 @@ async def _pause_one(db: AsyncSession, dl: Download) -> Download:
 
 async def _resume_one(db: AsyncSession, dl: Download) -> Download:
     if dl.status != DownloadStatus.paused:
-        raise ValueError(f"Download is not paused (status: '{dl.status}')")
+        raise ValueError(f"Download is not paused (status: '{dl.status.value}')")
     dl_service.resume_download(dl.id)
     dl.status = DownloadStatus.downloading
     return dl
@@ -96,7 +96,7 @@ async def _retry_one(
     """
     if dl.status not in (DownloadStatus.failed, DownloadStatus.cancelled):
         raise ValueError(
-            f"Only failed or cancelled downloads can be retried (status: '{dl.status}')"
+            f"Only failed or cancelled downloads can be retried (status: '{dl.status.value}')"
         )
     if dl.content_type == ContentType.live:
         raise ValueError("Live streams are not downloadable")
