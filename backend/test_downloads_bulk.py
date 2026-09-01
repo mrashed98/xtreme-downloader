@@ -47,6 +47,14 @@ def test_ids_and_status_both_optional_at_schema_level():
     assert r.ids is None and r.status is None
 
 
+def test_status_enum_renders_plainly():
+    # These strings end up in a toast. DownloadStatus is a str-Enum, so a bare
+    # f-string renders "DownloadStatus.completed" -- .value is what users should
+    # see. Guards the formatting, not the rule.
+    assert DownloadStatus.completed.value == "completed"
+    assert f"{DownloadStatus.completed.value}" == "completed"
+
+
 if __name__ == "__main__":
     for name, fn in sorted(globals().items()):
         if name.startswith("test_") and callable(fn):
