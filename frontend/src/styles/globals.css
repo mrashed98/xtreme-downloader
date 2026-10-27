@@ -1389,7 +1389,7 @@ img {
 
 .xgrid2 {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 16px;
 }
 
@@ -1506,6 +1506,9 @@ img {
 }
 .xmini:hover {
   background: var(--surface-card-hover);
+}
+.xmini > div:not(.xmini__thumb) {
+  min-width: 0;
 }
 .xmini__thumb {
   width: 46px;
@@ -3509,19 +3512,22 @@ img {
     border-radius: var(--radius-lg);
   }
   .xgrid2 {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
   }
   .xbrowse {
     flex-direction: column;
   }
   .xcatside {
     width: 100%;
+    min-width: 0;
     position: static;
     padding: 16px 0;
     max-height: none;
   }
   .xcatlist {
     flex-direction: row;
+    width: 100%;
+    min-width: 0;
     overflow-x: auto;
     gap: 8px;
     padding-bottom: 6px;
@@ -3535,6 +3541,22 @@ img {
     border-left: none;
     padding-left: 0;
     width: 100%;
+  }
+  .xfilter .xselect {
+    max-width: 100%;
+    min-width: 0;
+  }
+  .xfilter .xselect select {
+    max-width: 100%;
+  }
+  .xpl__row {
+    flex-wrap: wrap;
+  }
+  .xpl__row > div:not(.xpl__meta) {
+    flex: 1 1 0;
+  }
+  .xpl__meta {
+    flex-wrap: wrap;
   }
   .xposgrid {
     grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
