@@ -55,6 +55,7 @@ function SeriesDetailModal({
   const qc = useQueryClient();
   const { openQueue } = useAppStore();
   const [showTracking, setShowTracking] = useState(false);
+  const [stoppingTracking, setStoppingTracking] = useState(false);
   const [openSeasons, setOpenSeasons] = useState<Set<number>>(new Set([1]));
   const [downloadLanguage, setDownloadLanguage] = useState("English");
   const [downloadingEps, setDownloadingEps] = useState<Set<string>>(new Set());
@@ -65,13 +66,26 @@ function SeriesDetailModal({
     queryFn: () => seriesApi.get(playlistId, series.series_id),
   });
 
-  const { data: tracking } = useQuery({
+  const { data: tracking, isSuccess: trackingLoaded } = useQuery({
     queryKey: ["series-tracking", playlistId, series.series_id],
     queryFn: () => seriesApi.tracking(playlistId, series.series_id),
   });
 
   const seasons = detail?.seasons || [];
   const tone = toneFor(series.name);
+
+  const handleStopTracking = async () => {
+    setStoppingTracking(true);
+    try {
+      await seriesApi.untrack(playlistId, series.series_id);
+      qc.setQueryData(["series-tracking", playlistId, series.series_id], null);
+      toast.success(`Stopped tracking ${series.name}`);
+    } catch {
+      toast.error("Failed to stop tracking");
+    } finally {
+      setStoppingTracking(false);
+    }
+  };
 
   const toggleSeason = (num: number) => {
     setOpenSeasons((prev) => {
@@ -227,8 +241,14 @@ function SeriesDetailModal({
             >
               Play
             </Button>
-            <Button variant={tracking ? "hot" : "outline"} size="lg" icon={<Bell size={18} />} onClick={() => setShowTracking(true)}>
-              {tracking ? "Tracking" : "Track series"}
+            <Button
+              variant={tracking ? "hot" : "outline"}
+              size="lg"
+              icon={<Bell size={18} />}
+              disabled={!trackingLoaded || stoppingTracking}
+              onClick={() => tracking ? handleStopTracking() : setShowTracking(true)}
+            >
+              {stoppingTracking ? "Stopping…" : tracking ? "Untrack series" : "Track series"}
             </Button>
             <IconButton
               variant="glass"
